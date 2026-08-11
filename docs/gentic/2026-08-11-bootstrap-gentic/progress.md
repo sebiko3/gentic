@@ -29,6 +29,6 @@ Iteration budget: 11 remaining (rungs spend it; task sizes never do)
 | 5 | Items 1–6,9 re-verify after fixes | — | 0 | pass — verify_dod.sh re-run clean post-edit |
 
 ## Notes / handoff
-- Run executed autonomously; all decisions in decisions.md are `default — unconfirmed` and await user review — headline ones: five-phase shape, orchestrator+phase-skill packaging, committed docs/gentic/ artifacts, fibonacci mechanics (sizes/rungs/budget 13), never-block interview stance.
+- Run executed autonomously; all decisions were `default — unconfirmed` until 2026-08-11, when the user granted blanket approval ("decide everything I fully trust you to") — all now `user — delegated`. Branch merged to main on the same approval.
 - Deviation (recorded per honest-reporting rule): tasks 2–4 were authored before the GREEN tests rather than strictly test-first per file; RED was a single baseline probe. Phase-gate commits were introduced BY this run's own review findings, so this run's history approximates them retroactively with task-shaped commits.
 - Final report: all nine DoD items verified with evidence (see iteration log). 2 of 13 points spent. Non-goals honored: no CI, no eval harness, no plugin packaging, no multi-agent requirement.
