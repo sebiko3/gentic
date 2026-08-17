@@ -12,6 +12,17 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 ## Tasks
 | # | Task | Size | Depends on | Status (pending/in progress/done) |
 |---|------|------|------------|--------|
+| 1 | Back up settings.json; write hooks/README.md with the rollback command | 1 | — | done |
+| 2 | `lib/common.py` + harness skeleton (`tests/run.sh`) with degradation cases | 3 | 1 | done |
+| 3 | `user_prompt_submit.py` classifier + 12-prompt labelled fixture set | 5 | 2 | pending |
+| 4 | `post_tool_use.py` evidence ledger + touched-files tracking | 3 | 2 | pending |
+| 5 | `stop.py` verification gate + once-per-prompt escape hatch | 3 | 4 | pending |
+| 6 | `session_start.py` resume notice + state pruning | 2 | 2 | pending |
+| 7 | `pre_tool_use.py` destructive-git guard | 2 | 2 | pending |
+| 8 | Copy six gentic skills global + write `ROUTING.md` | 2 | — | pending |
+| 9 | `commands/ship.md` one-command GitHub flow | 3 | 8 | pending |
+| 10 | Wire `settings.json` hooks; enable `pr-review-toolkit` | 2 | 2–7 | pending |
+| 11 | Full harness run incl. latency + no-git degradation | 3 | 10 | pending |
 
 ## Iteration log
 | # | DoD item | Rung | Points | Result |
