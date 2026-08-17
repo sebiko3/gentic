@@ -17,8 +17,8 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 | 3 | `user_prompt_submit.py` classifier + 12-prompt labelled fixture set | 5 | 2 | done |
 | 4 | `post_tool_use.py` evidence ledger + touched-files tracking | 3 | 2 | done |
 | 5 | `stop.py` verification gate + once-per-prompt escape hatch | 3 | 4 | done |
-| 6 | `session_start.py` resume notice + state pruning | 2 | 2 | pending |
-| 7 | `pre_tool_use.py` destructive-git guard | 2 | 2 | pending |
+| 6 | `session_start.py` resume notice + state pruning | 2 | 2 | done |
+| 7 | `pre_tool_use.py` destructive-git guard | 2 | 2 | done |
 | 8 | Copy six gentic skills global + write `ROUTING.md` | 2 | — | pending |
 | 9 | `commands/ship.md` one-command GitHub flow | 3 | 8 | pending |
 | 10 | Wire `settings.json` hooks; enable `pr-review-toolkit` | 2 | 2–7 | pending |
