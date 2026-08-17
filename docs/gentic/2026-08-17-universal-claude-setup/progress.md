@@ -1,13 +1,13 @@
 # Run: universal-claude-setup
 Goal: A universal Claude Code setup (skills + hooks + agents) that works across all projects and automates intent capture → prompt transformation → spec → execution → verification → GitHub management.
-Iteration budget: 13 remaining (rungs spend it; task sizes never do)
+Iteration budget: 13 remaining (0 spent — no DoD item failed verification) (rungs spend it; task sizes never do)
 
 ## Phases
 - [x] 1 Scout
 - [x] 2 Interview
 - [x] 3 Masterprompt
 - [x] 4 Execute
-- [ ] 5 Iterate
+- [x] 5 Iterate
 
 ## Tasks
 | # | Task | Size | Depends on | Status (pending/in progress/done) |
@@ -35,3 +35,24 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 - Gate tests caught a real defect: the initial done-claim regex missed "Done — everything is passing"; broadened, and a NOT_A_CLAIM guard added so hedged statements ("not done yet", "want me to...") never block.
 - Live-session testing found a real defect the unit tests could not: Claude Code 2.1.193 does not send `prompt_id`, so per-turn state never reset and the gate would have fired once per *session*. Fixed by making `UserPromptSubmit` own the turn boundary (`common.begin_turn`); regression tests added under `RealPayloadShape`.
 - End-to-end proof: a live `claude -p` session that edited code and claimed done was blocked once, and the model restated the result as unverified rather than overclaiming. No deadlock.
+
+## Iteration log
+| # | DoD item | Rung | Points | Result |
+|---|----------|------|--------|--------|
+| 1 | all 19 items | — | 0 | Passed on first verification. `bash ~/.claude/hooks/tests/run.sh` exit 0, no FAIL lines; 57 unit/contract tests green (17+10+19+11); rollback verified in a scratch copy. |
+
+## Final report
+Delivered a machine-wide automation layer in `~/.claude/`: 5 hooks, 6 global gentic skills,
+1 command, 57 tests, 0 points of iteration budget spent.
+
+**Unconfirmed defaults awaiting confirmation** — see `decisions.md`:
+1. Intent classification is deterministic (no LLM on the per-prompt path).
+2. The Stop gate blocks only unverified done-claims, not every turn.
+3. Artifacts default to `docs/gentic/` in-repo, falling back to `~/.claude/gentic-runs/`.
+4. Only `pr-review-toolkit` was enabled; `feature-dev` deliberately left off.
+5. Prompt transformation is context injection — platform-forced, `updatedPrompt` absent in 2.1.193.
+6. Hooks always exit 0 on internal errors.
+7. gentic checkpoint commits are permitted during Execute but confined to `gentic/*` branches.
+
+**Not done (non-goals):** no Windows support, no CI changes, no new review agents, no rules DSL,
+no changes to `~/.claude/CLAUDE.md`, no auto-commit/push/PR outside `/ship`.
