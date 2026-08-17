@@ -14,7 +14,7 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 |---|------|------|------------|--------|
 | 1 | Back up settings.json; write hooks/README.md with the rollback command | 1 | — | done |
 | 2 | `lib/common.py` + harness skeleton (`tests/run.sh`) with degradation cases | 3 | 1 | done |
-| 3 | `user_prompt_submit.py` classifier + 12-prompt labelled fixture set | 5 | 2 | pending |
+| 3 | `user_prompt_submit.py` classifier + 12-prompt labelled fixture set | 5 | 2 | done |
 | 4 | `post_tool_use.py` evidence ledger + touched-files tracking | 3 | 2 | pending |
 | 5 | `stop.py` verification gate + once-per-prompt escape hatch | 3 | 4 | pending |
 | 6 | `session_start.py` resume notice + state pruning | 2 | 2 | pending |
