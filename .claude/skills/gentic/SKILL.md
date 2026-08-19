@@ -22,8 +22,8 @@ convention via `project_conventions.py`; never push, never open a PR).
 |---|-------|-------|----------|-----------------|
 | 1 | Scout | gentic-scout | `brief.md` | Facts grounded in repo; every open decision has a recommended default |
 | 2 | Interview | gentic-interview | `decisions.md` | Every open decision resolved (by user) or defaulted (flagged) |
-| 3 | Masterprompt | gentic-masterprompt | `masterprompt.md` | Critique pass done; every Definition of Done item names its check |
-| 4 | Execute | gentic-execute | task table in `progress.md` | All tasks checked off with checkpoint commits |
+| 3 | Masterprompt | gentic-masterprompt | `masterprompt.md` | Critique pass done; every Definition of Done item names its check and its test contract |
+| 4 | Execute | gentic-execute | task table in `progress.md` | All tasks checked off, each with observed RED evidence and a checkpoint commit |
 | 5 | Iterate | gentic-iterate | iteration log in `progress.md` | Every Definition of Done item verified with evidence |
 
 ## Starting a run
@@ -60,8 +60,8 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 - [ ] 5 Iterate
 
 ## Tasks
-| # | Task | Size | Depends on | Status (pending/in progress/done) |
-|---|------|------|------------|--------|
+| # | Task | Size | Depends on | Test | RED | Status |
+|---|------|------|------------|------|-----|--------|
 
 ## Iteration log
 | # | DoD item | Rung | Points | Result |

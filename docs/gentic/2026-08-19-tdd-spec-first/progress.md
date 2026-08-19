@@ -17,7 +17,7 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 | 3 | New `gentic-tdd` skill; `GENTIC_SKILL` regex and `run.sh` skill count updated (D1) | 3 | — | `tests/test_structure.py::test_gentic_tdd_skill_is_self_contained`, `::test_gentic_tdd_is_validated_like_the_other_phase_skills` | `AssertionError: False is not true : .claude/skills/gentic-tdd/SKILL.md does not exist`; `AssertionError: Regex didn't match … GENTIC_SKILL does not cover gentic-tdd` | done |
 | 4 | `gentic-execute` routes tasks through `gentic-tdd`; empty RED cell blocks ticking (D2) | 2 | 3 | `tests/test_structure.py::test_execute_routes_tasks_through_tdd` | `AssertionError: 'gentic-tdd' not found in … : gentic-execute does not invoke gentic-tdd` | done |
 | 5 | `gentic-masterprompt`: test contract per DoD item + critique scan (D3) | 2 | — | `tests/test_structure.py::test_masterprompt_requires_test_contracts` | `AssertionError: 'contract:' not found in … : masterprompt template has no test contract` | done |
-| 6 | `gentic/SKILL.md`: task-table template gains Test and RED columns (D4) | 1 | — | `tests/test_structure.py::test_task_table_template_has_tdd_columns` | | pending |
+| 6 | `gentic/SKILL.md`: task-table template gains Test and RED columns (D4) | 1 | — | `tests/test_structure.py::test_task_table_template_has_tdd_columns` | `AssertionError: 'Test' not found in '\| # \| Task \| Size \| Depends on \| Status …'` | done |
 | 7 | README.md and CLAUDE.md document the test-first spine (D9) | 2 | 3 | `tests/test_structure.py::test_docs_document_the_tdd_spine` | | pending |
 | 8 | Whole harness green; superpowers refs still conditional; install path handles skill 7 (D10, D11, D12) | 2 | 1-7 | `bash .claude/hooks/tests/run.sh` | | pending |
 
