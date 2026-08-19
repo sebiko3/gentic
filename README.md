@@ -77,6 +77,9 @@ touched, and there is no `rm -rf` or `--delete` anywhere in it.
 
 Reports any file that has drifted from the repo and exits non-zero, changing nothing.
 
+Hooks and skills take effect immediately. **Agents are resolved when a session starts**, so a
+newly installed agent is not invocable in the session that installed it — start a new one.
+
 For gentic alone, without the hooks and agents, copy `.claude/skills/gentic*` into your repo's
 skills directory and add the **Routing** section from [CLAUDE.md](CLAUDE.md) to your own — the
 workflow is markdown with no dependencies.
