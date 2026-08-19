@@ -48,7 +48,7 @@ SUPERPOWERS_REF = re.compile(r"superpowers:([a-z][a-z0-9-]*)")
 SLASH_COMMAND = re.compile(r"(?:^|(?<=[\s`(]))/([a-z][a-z0-9-]{2,})(?![\w/.-])")
 HOOK_PATH = re.compile(r"hooks/([a-z_]+\.py)")
 # Only the phase skills. `gentic-runs` is a directory in the fallback artifact path, not a skill.
-GENTIC_SKILL = re.compile(r"\b(gentic-(?:scout|interview|masterprompt|execute|iterate))\b")
+GENTIC_SKILL = re.compile(r"\b(gentic-(?:scout|interview|masterprompt|execute|iterate|tdd))\b")
 
 
 def frontmatter(path):
@@ -275,6 +275,68 @@ class SkillDefinitions(unittest.TestCase):
                 self.assertIsNotNone(fields, "no frontmatter")
                 self.assertEqual(fields.get("name"), path.parent.name)
                 self.assertTrue(fields.get("description"), "no description")
+
+
+class TestFirstSpine(unittest.TestCase):
+    """The workflow's test-first discipline must be real text, not an aspiration.
+
+    Before this suite, TDD inside gentic was a single delegated sentence in one phase skill.
+    Each rule below pins one piece of the spine: the discipline exists on its own, Execute
+    routes through it, the spec designs the tests, and the task table can hold the evidence.
+    """
+
+    def read(self, relative):
+        path = CLAUDE / relative
+        self.assertTrue(path.is_file(), f"{path.relative_to(REPO)} does not exist")
+        return path.read_text(encoding="utf-8")
+
+    def test_gentic_tdd_skill_is_self_contained(self):
+        body = self.read("skills/gentic-tdd/SKILL.md")
+        fields = frontmatter(CLAUDE / "skills/gentic-tdd/SKILL.md")
+        self.assertIsNotNone(fields, "no frontmatter")
+        self.assertEqual(fields.get("name"), "gentic-tdd")
+        lowered = body.lower()
+        for token in ("iron law", "red", "green", "refactor"):
+            self.assertIn(token, lowered, f"gentic-tdd does not define {token!r}")
+        self.assertRegex(body, r"\|.*\|", "no rationalisation or red-flag table")
+        # The discipline must stand alone: superpowers is a composition point, not a dependency.
+        for line in body.splitlines():
+            if SUPERPOWERS_REF.search(line):
+                self.assertRegex(line, QUALIFIER, f"unconditional plugin dependency: {line.strip()[:80]}")
+
+    def test_gentic_tdd_is_validated_like_the_other_phase_skills(self):
+        """`GENTIC_SKILL` gates which references get existence-checked; a skill missing from it
+        can be referenced by a typo forever without anything failing."""
+        self.assertRegex("gentic-tdd", GENTIC_SKILL, "GENTIC_SKILL does not cover gentic-tdd")
+
+    def test_execute_routes_tasks_through_tdd(self):
+        body = self.read("skills/gentic-execute/SKILL.md")
+        self.assertIn("gentic-tdd", body, "gentic-execute does not invoke gentic-tdd")
+        self.assertRegex(body, r"(?i)red", "gentic-execute never mentions RED evidence")
+
+    def test_masterprompt_requires_test_contracts(self):
+        body = self.read("skills/gentic-masterprompt/SKILL.md")
+        self.assertIn("contract:", body, "masterprompt template has no test contract")
+        lowered = body.lower()
+        for field in ("test file", "test name", "expected red"):
+            self.assertIn(field, lowered, f"test contract does not name {field!r}")
+        self.assertRegex(lowered, r"contract.*scan|scan.*contract",
+                         "the critique pass has no test-contract scan")
+
+    def test_task_table_template_has_tdd_columns(self):
+        body = self.read("skills/gentic/SKILL.md")
+        header = next((line for line in body.splitlines()
+                       if line.startswith("|") and "Task" in line and "Size" in line), "")
+        self.assertTrue(header, "no task table header in the progress.md template")
+        self.assertIn("Test", header, "task table header lacks a Test column")
+        self.assertIn("RED", header, "task table header lacks a RED column")
+
+    def test_docs_document_the_tdd_spine(self):
+        for name in ("README.md", "CLAUDE.md"):
+            with self.subTest(doc=name):
+                body = (REPO / name).read_text(encoding="utf-8")
+                self.assertIn("gentic-tdd", body, f"{name} does not mention gentic-tdd")
+                self.assertRegex(body, r"(?i)\bRED\b", f"{name} does not mention RED evidence")
 
 
 class NoOrphanedSkillFiles(unittest.TestCase):

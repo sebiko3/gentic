@@ -144,10 +144,10 @@ if grep -qi 'not a security boundary' "$HOOKS/README.md"; then
 else
   fail "README does not state the .agentignore limitation"
 fi
-if [ "$(ls "$HOOKS/../skills"/gentic*/SKILL.md 2>/dev/null | wc -l | tr -d ' ')" = "6" ]; then
-  pass "6 gentic skills present in the repo"
+if [ "$(ls "$HOOKS/../skills"/gentic*/SKILL.md 2>/dev/null | wc -l | tr -d ' ')" = "7" ]; then
+  pass "7 gentic skills present in the repo"
 else
-  fail "expected 6 gentic skills in the repo"
+  fail "expected 7 gentic skills in the repo"
 fi
 
 section "Result"
