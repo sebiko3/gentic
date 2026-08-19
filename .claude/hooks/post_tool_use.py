@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
-"""PostToolUse — maintain the evidence ledger backing the verification gate.
+"""PostToolUse — maintain the evidence ledger behind the verification and test-first gates.
 
-Records two things per turn: whether code (as opposed to prose) was edited, and whether a
-recognised verification command ran and succeeded. `stop.py` reads the result.
+Records four things per turn: whether code (as opposed to prose) was edited, whether any of
+those edits was a test file, whether a recognised verification command succeeded, and whether
+one *failed*. `stop.py` reads the result.
+
+A failed verification run is the RED signal of test-first work, which is why it is kept rather
+than discarded: "the test failed before the code was written" is only observable here.
+
+Classification is deliberately additive. A test file sets ``test_touched`` *and* ``code_changed``
+— the verification gate keys off the latter, so a test-only turn must keep arming it.
 
 Writes state only. Never injects context, never blocks.
 """
@@ -30,6 +37,19 @@ VERIFICATION = re.compile(
 )
 
 PROSE_SUFFIXES = {".md", ".markdown", ".txt", ".rst", ".adoc"}
+
+# Test files across the ecosystems this setup meets. Pure string matching, no filesystem access:
+# this runs after every edit and the suite holds the hook to a 150ms median.
+# `_test`/`test_` are anchored to a path boundary so `latest.py`, `contest.go` and `protest.ts`
+# stay production code.
+TEST_PATH = re.compile(
+    r"(^|/)(tests?|specs?|__tests__)/"           # a test directory anywhere in the path
+    r"|(^|/)test_[^/]*$"                          # test_app.py
+    r"|_test\.[a-z0-9]+$"                         # app_test.go
+    r"|\.(test|spec)\.[a-z0-9]+$"                 # app.test.ts, app.spec.js
+    r"|(^|/)[^/]*_spec\.[a-z0-9]+$",              # user_spec.rb
+    re.I,
+)
 
 # Subagents whose completion means this session's code has actually been looked at. The
 # harness has named the subagent tool both ``Task`` and ``Agent`` across versions; accept both
@@ -71,10 +91,13 @@ def main():
         command = str(tool_input.get("command") or "")
         if VERIFICATION.search(command):
             code = exit_code_of(payload)
-            # An unknown exit code counts as evidence; a known failure does not.
+            entry = {"command": command[:300], "exit_code": code, "ts": time.time()}
+            # An unknown exit code counts as success evidence; a known failure is RED instead.
             if code is None or code == 0:
-                state["evidence"].append({"command": command[:300], "exit_code": code, "ts": time.time()})
-                changed = True
+                state["evidence"].append(entry)
+            else:
+                state.setdefault("red", []).append(entry)
+            changed = True
 
     elif tool in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
         path = str(tool_input.get("file_path") or tool_input.get("path") or "")
@@ -83,6 +106,8 @@ def main():
                 state["touched"].append(path)
             if Path(path).suffix.lower() not in PROSE_SUFFIXES:
                 state["code_changed"] = True
+                if TEST_PATH.search(path):
+                    state["test_touched"] = True
             changed = True
 
     if changed:

@@ -31,8 +31,10 @@ def _fresh_turn(turn, prompt_id=None, session=None):
         "turn": turn,
         "prompt_id": prompt_id,
         "evidence": [],
+        "red": [],
         "touched": [],
         "code_changed": False,
+        "test_touched": False,
         "session": dict(session or {}),
     }
 
@@ -69,8 +71,10 @@ def load_turn_state(payload):
         state.setdefault("prompt_id", prompt_id)
     state.setdefault("turn", 0)
     state.setdefault("evidence", [])
+    state.setdefault("red", [])
     state.setdefault("touched", [])
     state.setdefault("code_changed", False)
+    state.setdefault("test_touched", False)
     state.setdefault("session", {})
     return state
 
