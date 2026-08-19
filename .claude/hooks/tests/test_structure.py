@@ -184,6 +184,30 @@ class ResolvableReferences(unittest.TestCase):
         self.assertEqual(offenders, [], "\n".join(offenders))
 
 
+class ReviewFixture(unittest.TestCase):
+    """The seeded-defect fixture must stay honest: planted defects present, decoy harmless."""
+
+    fixture = CLAUDE / "hooks/tests/fixtures/seeded_defect.py"
+    expected = CLAUDE / "hooks/tests/fixtures/seeded_defect.expected.md"
+
+    def test_both_files_exist(self):
+        self.assertTrue(self.fixture.is_file(), "fixture missing")
+        self.assertTrue(self.expected.is_file(), "expectation file missing")
+
+    def test_the_planted_defects_are_still_planted(self):
+        source = self.fixture.read_text()
+        self.assertIn("except Exception:\n        pass", source, "swallowed exception was fixed")
+        self.assertRegex(source, r'execute\(f"SELECT', "SQL interpolation was fixed")
+
+    def test_the_fixture_is_syntactically_valid(self):
+        compile(self.fixture.read_text(), str(self.fixture), "exec")
+
+    def test_the_expectation_names_both_defects_and_the_decoy(self):
+        text = self.expected.read_text()
+        for symbol in ("load_user", "record_login", "get_usr_nm"):
+            self.assertIn(symbol, text)
+
+
 class CommandDefinitions(unittest.TestCase):
     def test_every_command_has_a_description(self):
         for path in sorted((CLAUDE / "commands").glob("*.md")):

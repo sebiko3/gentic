@@ -21,7 +21,7 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 | 7 | `/review` command; rewrite `/ship` §4 to first-party agents | 2 | 4 | done |
 | 8 | gentic skills: dispatch contract, `masterprompt-critic`, `dod-auditor` | 3 | 4 | done |
 | 9 | README: agents section, installer usage, remove superseded install text | 2 | 2,4 | pending |
-| 10 | Seeded-defect fixture for `code-reviewer` | 1 | 4 | pending |
+| 10 | Seeded-defect fixture for `code-reviewer` | 1 | 4 | done |
 
 Coverage: every DoD item is claimed by at least one task —
 1,2→t3,t4 · 3→t3,t6 · 4→t1 · 5,6,7→t2 · 8→t1(all tasks re-run it) · 9,10,12→t5 ·
