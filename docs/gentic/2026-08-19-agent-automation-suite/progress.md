@@ -1,6 +1,6 @@
 # Run: agent-automation-suite
 Goal: New subagents plus an improved automation workflow for code review, orchestration, and spec-driven development, across all projects.
-Iteration budget: 11 remaining (2 spent) (rungs spend it; task sizes never do)
+Iteration budget: 2 remaining (11 spent) — 9 of them on defects the /ship review found (rungs spend it; task sizes never do)
 
 ## Phases
 - [x] 1 Scout
@@ -31,6 +31,12 @@ Coverage: every DoD item is claimed by at least one task —
 | # | DoD item | Rung | Points | Result |
 |---|----------|------|--------|--------|
 | 1 | DoD 2 — `grep -rn pr-review-toolkit` returned 5 unqualified lines, all inside `test_structure.py` itself. Root cause: the check is defined over a file set that includes the checker, which must contain the literal it searches for. Fixed by hoisting it to an `OPTIONAL_PLUGIN` constant and qualifying the remaining prose. DoD item untouched. | 1 | 1 | fixed — grep now returns 4 lines, all qualified |
+| 3 | DoD 17 — re-run after the agent registry refreshed at `/ship`. The real `code-reviewer` agent reported both planted defects (96, 92) and discarded the decoy. Matches `seeded_defect.expected.md`. | — | 0 | **PROVEN** — 20/20 |
+| 4 | `/ship` review, F1 — `install.sh` enumerated files with `find`, so any untracked file under `.claude/` was installed, including `settings.local.json` (project permission grants promoted to machine scope). Reproduced, then fixed: enumeration now comes from `git ls-files`, settings files are never installed. | 2 | 2 | fixed — 2 new tests |
+| 5 | `/ship` review, F2 — `install.sh` copied the hooks but never registered them; on a machine with no `hooks` key the entire safety layer lands inert and silent, while the README claimed "take effect immediately". The very defect class this run built `test_structure.py` to prevent, one level up. Now detects and prints the exact settings block. | 2 | 2 | fixed — 2 new tests |
+| 6 | `/ship` review, F3 — `run.sh`'s Configuration section asserted this machine's state (a specific plugin, a `.bak-*` file) while the README presents it as *the* verification for any user; a fresh clone got 3 FAIL lines. Now skips when no config is installed, and checks that every registered hook script exists. | 1 | 1 | fixed — verified against an empty `CLAUDE_HOME` |
+| 7 | `/ship` review, F4 — README claimed the reviewing agents "structurally cannot edit"; two of the three declare `Bash`. Claim narrowed to what is true, and the tool sets pinned by a test. | 1 | 1 | fixed |
+| 8 | `/ship` review, hooks layer — **live security bypass** in the destructive-command guard. `unquoted()` blanked quoted spans before matching raw text, so `rm -rf "$HOME"`, `rm -rf "/"`, `git reset "--hard"`, `git push … "--force"` were all allowed; `git clean -f -d` was missed by flag clustering. Root cause: quotes delimit arguments, they do not neuter them. Matching core replaced with argv tokenisation. | 3 | 3 | fixed — 13 new tests, bypass matrix all DENY, no false positives |
 | 2 | (no DoD item covered this) Regression caused by this run: task 1 imported `ROUTING.md` into the repo but not the global `gentic/SKILL.md`, which had diverged and carried the "Read ROUTING.md first" instruction. `install.sh` then propagated the stale repo copy outward, orphaning the file. Blast radius confirmed as exactly one paragraph by accounting for all 20 files the first install touched. Restored, plus a `NoOrphanedSkillFiles` guard. | 1 | 1 | fixed — pointer restored, live setup re-synced |
 
 ## Notes / handoff
@@ -125,3 +131,24 @@ swarm, or parallel-execution engine; no fifth agent; no change to gentic's five 
 Fibonacci sizing, or budget; no second hard block; no CI; no symlink mode or `uninstall.sh`; no
 Windows support; no push, PR, or merge to `main`; the other global skills (`zcontext`,
 `cua-driver`, `use-railway`, `learned`) were left where they are.
+
+
+## Post-ship review addendum
+
+`/ship`'s review step ran four agents (two `code-reviewer`, one `dod-auditor`, one
+`code-reviewer` on the fixture). It found **8 findings above the confidence gate**, of which
+seven were acted on above and one is deliberately deferred.
+
+**Deferred — `[read-only]` sections over-block (confidence 85).** In `pre_tool_use.py`, a
+command's mutating-ness is computed once and applied to every path it names, so
+`cp vendor/lib.js mine.js` is denied on `vendor/lib.js` even though that path is only the
+source. The `2>&1` half of this was fixed (redirection to a file descriptor no longer counts
+as a write); the write-target analysis was not. This belongs to the `agentignore-guard` run's
+deliverable, not this one, and with 2 budget points left the honest move is a new run rather
+than more scope here. It is disclosed in the PR body.
+
+**One reviewer claim was rejected after checking.** The hooks review listed
+`echo don't; <destructive>; echo won't` as a bypass. Bash pairs the two apostrophes and never
+executes the middle command — verified with a sentinel — so allowing it is correct, and the
+argv guard now agrees with the shell exactly. The test asserts the allow with that evidence
+in its docstring.
