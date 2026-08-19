@@ -46,8 +46,12 @@ The costs grow super-linearly because each rung discards more prior work — and
 ## The agents
 
 Four subagents, each closing a gap the workflow had left to improvisation. All four are plain
-markdown in [.claude/agents/](.claude/agents); the three reviewing ones are given read-only
-tool sets, so they structurally cannot edit what they judge.
+markdown in [.claude/agents/](.claude/agents). None of the reviewing three is given an edit
+tool. `masterprompt-critic` is fully read-only (`Read, Grep, Glob`); `code-reviewer` and
+`dod-auditor` also get `Bash`, which they need to run `git diff` and to execute the checks a
+Definition of Done names — so for those two the guarantee is narrower than "cannot": no direct
+file-editing tool, plus an instruction not to edit. `.claude/hooks/tests/test_structure.py`
+pins each agent's declared tools so this claim and the frontmatter cannot drift apart.
 
 | Agent | Fires when | What makes it useful |
 |-------|-----------|----------------------|

@@ -96,34 +96,58 @@ else
 fi
 
 section "Configuration"
-SETTINGS="$HOME/.claude/settings.json"
-if jq -e '.hooks' "$SETTINGS" >/dev/null 2>&1; then pass "settings.json has a hooks key"; else fail "settings.json missing hooks key"; fi
-if jq -e '.enabledPlugins["superpowers@claude-plugins-official"]' "$SETTINGS" >/dev/null 2>&1; then
-  pass "pre-existing settings keys preserved"
+# These inspect the installed machine, not the repo. On a machine that has not installed this
+# setup they must SKIP, not fail: the README presents this script as the way to verify a fresh
+# install, and greeting a new user with red is how a harness gets ignored. Assertions about one
+# particular machine's plugins or backup files were removed for the same reason.
+SETTINGS="${CLAUDE_HOME:-$HOME/.claude}/settings.json"
+if [ ! -f "$SETTINGS" ] || ! jq -e '.hooks' "$SETTINGS" >/dev/null 2>&1; then
+  printf '  skip  no installed hook configuration on this machine\n'
 else
-  fail "pre-existing settings keys were lost"
+  pass "settings.json has a hooks key"
+
+  if grep -qE '"type"[[:space:]]*:[[:space:]]*"(agent|prompt)"' "$SETTINGS"; then
+    fail "an LLM-backed hook is wired on a hot path"
+  else
+    pass "no LLM calls on hot paths"
+  fi
+
+  MATCHER=$(jq -r '.hooks.PreToolUse[0].matcher' "$SETTINGS" 2>/dev/null)
+  MISSING=""
+  for tool in Bash Read Edit Write; do
+    case "$MATCHER" in *"$tool"*) ;; *) MISSING="$MISSING $tool";; esac
+  done
+  if [ -z "$MISSING" ]; then
+    pass "PreToolUse matcher covers Bash/Read/Edit/Write"
+  else
+    fail "PreToolUse matcher missing:$MISSING"
+  fi
+
+  # Every hook the settings register must exist on disk. This is the "enabled but not loadable"
+  # class that shipped once already.
+  MISSING_SCRIPTS=""
+  for script in $(jq -r '[.hooks[][].hooks[].command] | .[]' "$SETTINGS" 2>/dev/null \
+                  | grep -oE '[^" ]*hooks/[a-z_]+\.py'); do
+    expanded=$(eval echo "$script")
+    [ -f "$expanded" ] || MISSING_SCRIPTS="$MISSING_SCRIPTS $script"
+  done
+  if [ -z "$MISSING_SCRIPTS" ]; then
+    pass "every registered hook script exists"
+  else
+    fail "registered but missing:$MISSING_SCRIPTS"
+  fi
 fi
-if ls "$HOME"/.claude/settings.json.bak-* >/dev/null 2>&1; then pass "backup present"; else fail "no settings backup"; fi
-if grep -qE '"type"[[:space:]]*:[[:space:]]*"(agent|prompt)"' "$SETTINGS"; then
-  fail "an LLM-backed hook is wired on a hot path"
-else
-  pass "no LLM calls on hot paths"
-fi
-MATCHER=$(jq -r '.hooks.PreToolUse[0].matcher' "$SETTINGS" 2>/dev/null)
-MISSING=""
-for tool in Bash Read Edit Write; do
-  case "$MATCHER" in *"$tool"*) ;; *) MISSING="$MISSING $tool";; esac
-done
-if [ -z "$MISSING" ]; then pass "PreToolUse matcher covers Bash/Read/Edit/Write"; else fail "PreToolUse matcher missing:$MISSING"; fi
-if grep -qi 'not a security boundary' "$HOME/.claude/hooks/README.md"; then
+
+# Repo-local checks: true on any checkout, no machine state involved.
+if grep -qi 'not a security boundary' "$HOOKS/README.md"; then
   pass ".agentignore limitation documented"
 else
   fail "README does not state the .agentignore limitation"
 fi
-if [ "$(ls "$HOME"/.claude/skills/gentic*/SKILL.md 2>/dev/null | wc -l | tr -d ' ')" = "6" ]; then
-  pass "6 gentic skills globally available"
+if [ "$(ls "$HOOKS/../skills"/gentic*/SKILL.md 2>/dev/null | wc -l | tr -d ' ')" = "6" ]; then
+  pass "6 gentic skills present in the repo"
 else
-  fail "expected 6 global gentic skills"
+  fail "expected 6 gentic skills in the repo"
 fi
 
 section "Result"

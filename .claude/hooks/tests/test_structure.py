@@ -105,6 +105,25 @@ class AgentDefinitions(unittest.TestCase):
             with self.subTest(agent=path.name):
                 self.assertEqual(frontmatter(path)["name"], path.stem)
 
+    EXPECTED_TOOLS = {
+        "code-reviewer": "Read, Grep, Glob, Bash",
+        "dod-auditor": "Read, Grep, Glob, Bash",
+        "masterprompt-critic": "Read, Grep, Glob",
+    }
+
+    def test_reviewing_agents_declare_exactly_the_documented_tools(self):
+        """The README makes a claim about these tool sets; pin them so it cannot go stale.
+
+        No reviewing agent may gain an edit tool (Edit, Write, MultiEdit, NotebookEdit) without
+        this failing and the README being updated in the same change.
+        """
+        for name, expected in self.EXPECTED_TOOLS.items():
+            with self.subTest(agent=name):
+                fields = frontmatter(AGENTS / f"{name}.md")
+                self.assertEqual(fields.get("tools"), expected)
+                for forbidden in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
+                    self.assertNotIn(forbidden, fields.get("tools", ""))
+
     def test_each_agent_states_what_it_returns(self):
         """An agent whose output shape is undefined cannot be merged by its caller."""
         for path in sorted(AGENTS.glob("*.md")):
