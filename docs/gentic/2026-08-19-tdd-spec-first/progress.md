@@ -13,7 +13,7 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 | # | Task | Size | Depends on | Test | RED | Status |
 |---|------|------|------------|------|-----|--------|
 | 1 | Ledger: record failing verification as RED, classify test files (D5, D6) | 3 | — | `tests/test_tdd.py::test_failing_verification_is_recorded_as_red`, `::test_test_files_are_classified_separately` | `AssertionError: None is not true : no RED recorded for a failing verification command`; `AssertionError: None is not true : test file edit was not recorded` | done |
-| 2 | `stop.py`: advisory TDD nudge, suppressed and once per session (D7, D8) | 3 | 1 | `tests/test_tdd.py::test_tdd_nudge_is_advisory`, `::test_tdd_nudge_suppressed_and_bounded` | | pending |
+| 2 | `stop.py`: advisory TDD nudge, suppressed and once per session (D7, D8) | 3 | 1 | `tests/test_tdd.py::test_tdd_nudge_is_advisory`, `::test_tdd_nudge_suppressed_and_bounded`, `::test_both_nudges_arrive_as_one_message` | `AssertionError: 'failing test' not found in '…not reviewed yet this session…'`; `AssertionError: 0 != 1 : nudge fired twice in one session`. Mid-task RED: routing TDD first silenced the review nudge — `test_review_nudge` failed 2/2 until both were combined into one message | done |
 | 3 | New `gentic-tdd` skill; `GENTIC_SKILL` regex and `run.sh` skill count updated (D1) | 3 | — | `tests/test_structure.py::test_gentic_tdd_skill_is_self_contained` | | pending |
 | 4 | `gentic-execute` routes tasks through `gentic-tdd`; empty RED cell blocks ticking (D2) | 2 | 3 | `tests/test_structure.py::test_execute_routes_tasks_through_tdd` | | pending |
 | 5 | `gentic-masterprompt`: test contract per DoD item + critique scan (D3) | 2 | — | `tests/test_structure.py::test_masterprompt_requires_test_contracts` | | pending |
@@ -28,3 +28,8 @@ Sizes are planning estimates only; they never spend the iteration budget.
 |---|----------|------|--------|--------|
 
 ## Notes / handoff
+
+**Task 2 note (plan drift, not spec drift).** Implementing the TDD nudge as "one advisory message
+per stop, TDD wins" broke `test_review_nudge` — the review nudge was silently suppressed. Fixed by
+combining both nudges into a single `systemMessage` instead of letting them compete. No DoD item
+changed; the existing suite caught it, which is the intended behaviour of the harness.

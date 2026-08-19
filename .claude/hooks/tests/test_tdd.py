@@ -183,6 +183,19 @@ class TddNudge(TddTestCase):
         fired = sum(1 for o in (first, second) if "failing test" in o.lower())
         self.assertEqual(fired, 1, "nudge fired twice in one session")
 
+    def test_both_nudges_arrive_as_one_message(self):
+        """Regression: routing the TDD nudge first once silenced the review nudge entirely.
+
+        Both are once-per-session and both can come due on the same stop, so they are combined
+        rather than made to compete.
+        """
+        self.edit("src/app.py")
+        _, out, _ = self.stop()
+        lowered = out.lower()
+        self.assertIn("failing test", lowered)
+        self.assertIn("/review", out)
+        self.assertEqual(out.strip().count("\n"), 0, "advisory output must be one JSON object")
+
     def test_prose_only_turn_is_never_nudged(self):
         self.edit("README.md")
         _, out, _ = self.stop()

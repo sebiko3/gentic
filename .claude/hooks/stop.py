@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """Stop — refuse a success claim that nothing backs up.
 
-This hook does two independent things. The verification gate below is the only routine hard
-block in the setup; the review nudge above it never blocks and only ever prints a suggestion.
-Keeping the nudge advisory is deliberate — a second adversarial gate would make the setup
+This hook does three independent things. The verification gate below is the only routine hard
+block in the setup; the two nudges above it never block and only ever print a suggestion.
+Keeping the nudges advisory is deliberate — a second adversarial gate would make the setup
 something to work around rather than with.
+
+The TDD nudge asks the question that precedes verification: not "was anything checked?" but
+"did a test fail before the code was written?". It fires when a turn changed production code
+with no test file touched and no failing verification run observed. Test-first work is
+therefore silent by construction, and the nudge is bounded to once per session.
 
 The gate fires when all of the following hold:
 
@@ -52,6 +57,10 @@ NOT_A_CLAIM = re.compile(
 NUDGE = ("{n} changed file(s) not reviewed yet this session — {files}. "
          "Consider /review, or /ship to review, commit and open a PR.")
 
+TDD_NUDGE = ("{n} production file(s) changed — {files} — with no test touched and no failing "
+             "test observed first. Test-first means the failing test comes before the code; "
+             "if a test did fail first, run it so the evidence is on the record.")
+
 REASON = """Verification gate: this turn edited {n} file(s) — {files} — and the response claims the
 work is done, but no verification command succeeded during this turn.
 
@@ -65,19 +74,48 @@ def named(touched):
     return ", ".join(Path(p).name for p in touched[:4]) or "unknown"
 
 
-def review_nudge(payload, state):
-    """Suggest a review once per session. Advisory: this path never blocks."""
+def tdd_applies(state):
+    """Production code changed with no test-first signal anywhere in the turn.
+
+    A test-first turn is silent by construction: it either edited a test file or produced a
+    failing verification run (the RED of red-green).
+    """
+    if not state.get("code_changed") or state.get("test_touched") or state.get("red"):
+        return False
+    return not state.get("session", {}).get("tdd_nudge_shown")
+
+
+def review_applies(state):
+    """Code changed and nothing has looked at it yet this session."""
     if not state.get("code_changed"):
-        return
+        return False
+    session = state.get("session", {})
+    return not (session.get("reviewed") or session.get("review_nudge_shown"))
+
+
+def advisory_nudges(payload, state):
+    """Emit the applicable suggestions as one message. This path never blocks.
+
+    Both nudges are once-per-session, and both can come due on the same stop. They are combined
+    into a single ``systemMessage`` rather than emitted separately: one message keeps the output
+    a single well-formed object, and two separate suggestions in one turn is the kind of noise
+    that gets a harness ignored.
+    """
     session = state.setdefault("session", {})
-    if session.get("reviewed") or session.get("review_nudge_shown"):
-        return
-
-    session["review_nudge_shown"] = True
-    common.save_state(payload.get("session_id"), state)
-
     touched = state.get("touched", [])
-    common.emit_message(NUDGE.format(n=len(touched), files=named(touched)))
+    parts = []
+
+    if tdd_applies(state):
+        session["tdd_nudge_shown"] = True
+        parts.append(TDD_NUDGE.format(n=len(touched), files=named(touched)))
+    if review_applies(state):
+        session["review_nudge_shown"] = True
+        parts.append(NUDGE.format(n=len(touched), files=named(touched)))
+
+    if not parts:
+        return
+    common.save_state(payload.get("session_id"), state)
+    common.emit_message("\n\n".join(parts))
 
 
 def verification_gate(payload, state, message):
@@ -103,7 +141,7 @@ def main():
     payload = common.read_payload()
     state = common.load_turn_state(payload)
 
-    review_nudge(payload, state)
+    advisory_nudges(payload, state)
 
     message = str(payload.get("last_assistant_message") or "")
     if message:
