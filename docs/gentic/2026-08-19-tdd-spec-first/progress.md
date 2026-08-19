@@ -18,7 +18,7 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 | 4 | `gentic-execute` routes tasks through `gentic-tdd`; empty RED cell blocks ticking (D2) | 2 | 3 | `tests/test_structure.py::test_execute_routes_tasks_through_tdd` | `AssertionError: 'gentic-tdd' not found in … : gentic-execute does not invoke gentic-tdd` | done |
 | 5 | `gentic-masterprompt`: test contract per DoD item + critique scan (D3) | 2 | — | `tests/test_structure.py::test_masterprompt_requires_test_contracts` | `AssertionError: 'contract:' not found in … : masterprompt template has no test contract` | done |
 | 6 | `gentic/SKILL.md`: task-table template gains Test and RED columns (D4) | 1 | — | `tests/test_structure.py::test_task_table_template_has_tdd_columns` | `AssertionError: 'Test' not found in '\| # \| Task \| Size \| Depends on \| Status …'` | done |
-| 7 | README.md and CLAUDE.md document the test-first spine (D9) | 2 | 3 | `tests/test_structure.py::test_docs_document_the_tdd_spine` | | pending |
+| 7 | README.md and CLAUDE.md document the test-first spine (D9) | 2 | 3 | `tests/test_structure.py::test_docs_document_the_tdd_spine` | `AssertionError: 'gentic-tdd' not found in … : README.md does not mention gentic-tdd` (and the same for CLAUDE.md) | done |
 | 8 | Whole harness green; superpowers refs still conditional; install path handles skill 7 (D10, D11, D12) | 2 | 1-7 | `bash .claude/hooks/tests/run.sh` | | pending |
 
 Sizes are planning estimates only; they never spend the iteration budget.

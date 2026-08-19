@@ -1,6 +1,6 @@
 # gentic
 
-A spec-first, resumable deep workflow for [Claude Code](https://claude.com/claude-code). One command turns a vague request into verified work: informed clarifying questions → a masterprompt that could brief a stranger → execution in small verified steps → iteration on an escalation ladder with a hard budget.
+A spec-first, test-first, resumable deep workflow for [Claude Code](https://claude.com/claude-code). One command turns a vague request into verified work: informed clarifying questions → a masterprompt that could brief a stranger → execution in small test-first steps → iteration on an escalation ladder with a hard budget.
 
 ## Why
 
@@ -29,11 +29,47 @@ flowchart LR
 |-------|--------------------|----------|
 | **Scout** | What does reality already decide? | `brief.md` — facts, patterns, open decisions each with a recommended default |
 | **Interview** | What must the user decide? | `decisions.md` — only high-leverage × high-uncertainty questions get asked (≤4 per round); data/security calls auto-rank first |
-| **Masterprompt** | Could a stranger deliver this? | `masterprompt.md` — mission, decisions, non-goals, and a Definition of Done where every item names its exact check. Then a five-scan critique pass. |
-| **Execute** | What's the smallest verified step? | task table in `progress.md` — fibonacci-sized tasks, dependency-ordered riskiest-first, test-first, one commit per task |
+| **Masterprompt** | Could a stranger deliver this? | `masterprompt.md` — mission, decisions, non-goals, and a Definition of Done where every item names its exact check **and its test contract**. Then a six-scan critique pass. |
+| **Execute** | What's the smallest verified step? | task table in `progress.md` — fibonacci-sized tasks, dependency-ordered riskiest-first, run through [`gentic-tdd`](.claude/skills/gentic-tdd/SKILL.md), one commit per task, each row carrying the failure that was actually observed |
 | **Iterate** | Patch, rework, or re-open the spec? | iteration log in `progress.md` — evidence for every DoD item; failures climb a ladder instead of looping |
 
 Every artifact lives in `docs/gentic/<date>-<slug>/` and is committed, so **any session — including one that lost its context — resumes any run** by reading the run directory.
+
+## The test-first spine
+
+Spec-driven and test-driven are one mechanism here, not two practices bolted together.
+
+**The spec designs the tests.** Every Definition of Done item carries a *test contract* — the test
+file, the test name, the behaviour asserted, and **the failure to expect**:
+
+```markdown
+- [ ] Empty exports are rejected rather than written
+      verify: `pytest tests/test_export.py -k empty`
+      contract: tests/test_export.py · test_empty_selection_is_rejected ·
+                exporting zero rows raises ExportError · expected RED: `Failed: DID NOT RAISE`
+```
+
+Predicting the failure is the load-bearing part: it is how the executing agent knows a RED was the
+*right* RED and not a typo. An item with a verify command but no contract is checking work nobody
+designed — the critique pass now scans for exactly that.
+
+**The tests gate the work.** [`gentic-tdd`](.claude/skills/gentic-tdd/SKILL.md) owns every task —
+no production code without a failing test first, and the real failure text is pasted into the task
+row:
+
+| # | Task | Size | Test | RED | Status |
+|---|------|------|------|-----|--------|
+| 1 | Reject empty exports | 2 | `test_empty_selection_is_rejected` | `Failed: DID NOT RAISE` | done |
+
+**A task with an empty `RED` cell is not done.** The cell is the only place a resumed session can
+learn the test was ever seen to fail — memory is precisely what a compaction takes away. Docs and
+prompts count as behaviour and get contract tests; `n/a` is reserved for tasks that change nothing
+observable, and must say why.
+
+**The hooks notice, they do not police.** The ledger now keeps *failing* verification runs — the
+RED signal it used to discard — and the Stop hook mentions a turn that changed production code with
+no test touched and no failure observed. Advisory, once per session. The verification gate stays
+the setup's only hard block, because scarcity is what makes it credible.
 
 ## The fibonacci mechanics
 
@@ -88,7 +124,7 @@ For gentic alone, without the hooks and agents, copy `.claude/skills/gentic*` in
 skills directory and add the **Routing** section from [CLAUDE.md](CLAUDE.md) to your own — the
 workflow is markdown with no dependencies.
 
-Works standalone; if the [superpowers](https://github.com/obra/superpowers) plugin is installed, gentic composes with it (TDD, systematic debugging, verification gates) at marked points.
+Works standalone — the test-first discipline is gentic's own skill, not a borrowed one. If the [superpowers](https://github.com/obra/superpowers) plugin is installed, gentic composes with it (TDD, systematic debugging, verification gates) at marked points.
 
 ## Adopting gentic in a project
 

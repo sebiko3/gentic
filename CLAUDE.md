@@ -1,6 +1,6 @@
 # gentic
 
-Spec-first, resumable deep workflow for Claude Code. Five gated phases — Scout → Interview → Masterprompt → Execute → Iterate — each writing a durable artifact under `docs/gentic/<date>-<slug>/`, so any session can resume any run.
+Spec-first, test-first, resumable deep workflow for Claude Code. Five gated phases — Scout → Interview → Masterprompt → Execute → Iterate — each writing a durable artifact under `docs/gentic/<date>-<slug>/`, so any session can resume any run.
 
 ## Routing — decide this before touching anything
 
@@ -21,7 +21,17 @@ At session start, if the user references past work, check `docs/gentic/*/progres
 - Runs execute on a `gentic/<slug>` branch, never on main.
 - Checkpoint commits: `gentic(<slug>): <task summary>`, one task per commit.
 - Never edit a Definition of Done item to make it pass; spec changes go through the rung-5 escalation in `gentic-iterate`.
+- Every task goes through `gentic-tdd`: the test comes first, its observed failure goes in the task's `RED` cell, and a task with an empty `RED` cell is not done.
 - Any decision the user didn't personally make — silent defaults included — is flagged `default — unconfirmed` and surfaced in the final report.
+
+## Test-first spine
+
+The spec designs the tests and the tests gate the work — the two halves are one mechanism:
+
+- **Masterprompt** — every Definition of Done item names a *test contract*: the test file, the test name, the behaviour asserted, and the expected RED. An item with a verify command but no contract is checking work it never designed.
+- **Execute** — `gentic-tdd` owns the per-task loop. No production code without a failing test first; the real failure text is pasted into `progress.md`, because a resumed session can read the artifact and not your memory.
+- **Docs and prompts count as behaviour.** Their test is a contract test in the project's suite (`.claude/hooks/tests/test_structure.py` is the pattern here). `n/a` is only for a task that changes nothing observable, and must state why.
+- **The hooks notice, they do not police.** The ledger records failing verification runs as RED evidence and flags a turn that changed production code with no test touched and no failure seen. It is advisory and fires once per session; the verification gate remains the only hard block.
 
 ## Fibonacci discipline
 
