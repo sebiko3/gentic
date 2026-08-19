@@ -31,6 +31,12 @@ VERIFICATION = re.compile(
 
 PROSE_SUFFIXES = {".md", ".markdown", ".txt", ".rst", ".adoc"}
 
+# Subagents whose completion means this session's code has actually been looked at. The
+# harness has named the subagent tool both ``Task`` and ``Agent`` across versions; accept both
+# rather than tying the signal to one spelling.
+REVIEW_AGENTS = {"code-reviewer", "dod-auditor"}
+SUBAGENT_TOOLS = {"Task", "Agent"}
+
 
 def exit_code_of(payload):
     """Best-effort exit code for a Bash call. ``None`` when the payload does not carry one."""
@@ -55,7 +61,13 @@ def main():
     state = common.load_turn_state(payload)
     changed = False
 
-    if tool == "Bash":
+    if tool in SUBAGENT_TOOLS:
+        subagent = str(tool_input.get("subagent_type") or "").strip()
+        if subagent in REVIEW_AGENTS:
+            state.setdefault("session", {})["reviewed"] = True
+            changed = True
+
+    elif tool == "Bash":
         command = str(tool_input.get("command") or "")
         if VERIFICATION.search(command):
             code = exit_code_of(payload)

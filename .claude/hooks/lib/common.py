@@ -20,13 +20,20 @@ STATE_DIR = Path(os.environ.get("CLAUDE_HOOK_STATE_DIR") or Path.home() / ".clau
 _UNSAFE_ID = re.compile(r"[^A-Za-z0-9_-]")
 
 
-def _fresh_turn(turn, prompt_id=None):
+def _fresh_turn(turn, prompt_id=None, session=None):
+    """A clean per-turn ledger.
+
+    ``session`` is deliberately carried across turns: facts like "a review ran" and "the nudge
+    was already shown" describe the session, not the turn, and would be erased every prompt if
+    they lived alongside the ledger.
+    """
     return {
         "turn": turn,
         "prompt_id": prompt_id,
         "evidence": [],
         "touched": [],
         "code_changed": False,
+        "session": dict(session or {}),
     }
 
 
@@ -39,7 +46,11 @@ def begin_turn(payload):
     """
     session_id = payload.get("session_id")
     previous = load_state(session_id)
-    state = _fresh_turn(int(previous.get("turn") or 0) + 1, payload.get("prompt_id"))
+    state = _fresh_turn(
+        int(previous.get("turn") or 0) + 1,
+        payload.get("prompt_id"),
+        previous.get("session"),
+    )
     save_state(session_id, state)
     return state
 
@@ -53,13 +64,14 @@ def load_turn_state(payload):
     state = load_state(payload.get("session_id"))
     prompt_id = payload.get("prompt_id")
     if prompt_id and state.get("prompt_id") and str(state["prompt_id"]) != str(prompt_id):
-        return _fresh_turn(int(state.get("turn") or 0) + 1, prompt_id)
+        return _fresh_turn(int(state.get("turn") or 0) + 1, prompt_id, state.get("session"))
     if prompt_id:
         state.setdefault("prompt_id", prompt_id)
     state.setdefault("turn", 0)
     state.setdefault("evidence", [])
     state.setdefault("touched", [])
     state.setdefault("code_changed", False)
+    state.setdefault("session", {})
     return state
 
 

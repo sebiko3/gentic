@@ -13,6 +13,12 @@ recommended defaults because leverage × uncertainty did not earn a question.
 | Verification layer for this run | **Extend `hooks/tests/run.sh`** with a structural validator (agent/skill/command frontmatter parses; `name` matches filename; every referenced skill, agent, and hook path resolves) plus one seeded-defect invocation of `code-reviewer`. | Manual walkthrough only | Gentic requires every Definition-of-Done item to name its check; markdown agents are otherwise unverifiable. A resolvable-reference check is precisely what would have caught the `pr-review-toolkit` / `/ship` breakage before it shipped. | default — unconfirmed |
 | Repo ↔ `~/.claude` skill duplication | **Repo is canonical; `install.sh` syncs skills, hooks, commands, agents, and `ROUTING.md`**, with a harness check that the two trees match. | Accept drift | Cheap once the installer from decision 1 exists, and it stops this run's own edits from landing in only one of the two copies. | default — unconfirmed |
 
+## Added during Execute (task 5)
+
+| Decision | Chosen | Alternatives considered | Why | Source |
+|----------|--------|------------------------|-----|--------|
+| `lib/common.py` joins the sanctioned edit list | **Yes** — add a `session` sub-dict that survives turn boundaries; `stop.py` and `post_tool_use.py` read and write it. | Store the nudge flag in a separate file; make the nudge once-per-turn instead of once-per-session | `common.begin_turn()` builds a fresh dict every prompt, so any key written by `post_tool_use` is erased at the next turn — the once-per-session requirement (DoD 9d) is unimplementable without it. The masterprompt's three-file constraint was the author's own enumeration during the critique pass, not a user decision, and its intent ("additive only; the verification gate's behaviour unchanged") is preserved: DoD 11 holds `test_gate.py` to its 19 passing tests. | default — unconfirmed |
+
 ## Not decided here
 
 - Whether to push or open a PR. Out of scope for a run by ROUTING.md; `/ship` owns that and only

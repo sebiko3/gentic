@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """Stop — refuse a success claim that nothing backs up.
 
-This is the only routine hard block in the setup. It fires when all of the following hold:
+This hook does two independent things. The verification gate below is the only routine hard
+block in the setup; the review nudge above it never blocks and only ever prints a suggestion.
+Keeping the nudge advisory is deliberate — a second adversarial gate would make the setup
+something to work around rather than with.
+
+The gate fires when all of the following hold:
 
   1. code (not prose) was edited during this turn, and
   2. the final message claims the work is done/fixed/passing, and
@@ -44,6 +49,9 @@ NOT_A_CLAIM = re.compile(
     re.I,
 )
 
+NUDGE = ("{n} changed file(s) not reviewed yet this session — {files}. "
+         "Consider /review, or /ship to review, commit and open a PR.")
+
 REASON = """Verification gate: this turn edited {n} file(s) — {files} — and the response claims the
 work is done, but no verification command succeeded during this turn.
 
@@ -53,14 +61,27 @@ real output, or restate the result without claiming it is done/fixed/passing.
 This gate blocks at most once per prompt; if it is wrong here, simply continue."""
 
 
-def main():
-    payload = common.read_payload()
-    message = str(payload.get("last_assistant_message") or "")
-    if not message:
+def named(touched):
+    return ", ".join(Path(p).name for p in touched[:4]) or "unknown"
+
+
+def review_nudge(payload, state):
+    """Suggest a review once per session. Advisory: this path never blocks."""
+    if not state.get("code_changed"):
+        return
+    session = state.setdefault("session", {})
+    if session.get("reviewed") or session.get("review_nudge_shown"):
         return
 
-    state = common.load_turn_state(payload)
+    session["review_nudge_shown"] = True
+    common.save_state(payload.get("session_id"), state)
 
+    touched = state.get("touched", [])
+    common.emit_message(NUDGE.format(n=len(touched), files=named(touched)))
+
+
+def verification_gate(payload, state, message):
+    """Refuse a success claim that nothing backs up. The one hard block."""
     if not state.get("code_changed"):
         return
     if state.get("evidence"):
@@ -75,8 +96,18 @@ def main():
     common.save_state(payload.get("session_id"), state)
 
     touched = state.get("touched", [])
-    shown = ", ".join(Path(p).name for p in touched[:4]) or "unknown"
-    common.block(REASON.format(n=len(touched), files=shown))
+    common.block(REASON.format(n=len(touched), files=named(touched)))
+
+
+def main():
+    payload = common.read_payload()
+    state = common.load_turn_state(payload)
+
+    review_nudge(payload, state)
+
+    message = str(payload.get("last_assistant_message") or "")
+    if message:
+        verification_gate(payload, state, message)
 
 
 if __name__ == "__main__":
