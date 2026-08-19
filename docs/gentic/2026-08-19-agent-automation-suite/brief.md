@@ -135,3 +135,20 @@ edits, possibly hook code — not application code.
    repo canonical and have `install.sh` sync both skills and `ROUTING.md`, with a test that the
    two trees match. **Recommended default: B**, folded into decision 1's installer — cheap once
    the installer exists, and it prevents this run's edits from landing in only one of the copies.
+
+
+## Corrections (2026-08-19, found during Execute task 3)
+
+- **The `pr-review-toolkit` fact was wrong in its mechanism.** The brief states the plugin is
+  "absent from `~/.claude/plugins/installed_plugins.json`". It is **present** there — the
+  earlier reading truncated the file at 40 lines and missed the entry. The actual defect is
+  one level down: its recorded `installPath`
+  (`~/.claude/plugins/cache/claude-plugins-official/pr-review-toolkit/unknown`) **does not
+  exist on disk**, so the plugin is registered, enabled, and unloadable.
+- **The conclusion drawn from it stands unchanged**, and is independently confirmed by this
+  session's available-agent list containing no `code-reviewer`: `/ship` §4 invokes agents that
+  never resolve, and review silently degrades. Decision 3 (remove the entry, go first-party) is
+  unaffected.
+- **The validator was strengthened as a result**: DoD item 3's check now requires each enabled
+  plugin's `installPath` to exist, not merely that the registry names it. Checking the key
+  alone would have reported this machine as healthy.
