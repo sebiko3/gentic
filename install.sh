@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 # Install this repo's Claude Code setup into ~/.claude (override with CLAUDE_HOME).
 #
-# Copies only the files this repo ships and never removes anything else: ~/.claude also holds
+# Copies only files this repo TRACKS, and never removes anything else: ~/.claude also holds
 # sessions, plugins, memory, and skills that belong to the user, not to this project. There is
 # deliberately no rm -rf and no rsync --delete anywhere below.
+#
+# The file list comes from `git ls-files`, not from a filesystem walk. A walk would also pick up
+# untracked files that happen to sit under .claude/ — in particular settings.local.json, which
+# Claude Code writes to record project-scoped permission grants. Copying that into ~/.claude
+# would silently promote those grants to machine scope.
 #
 #   ./install.sh           install or update
 #   ./install.sh --check   report drift and exit non-zero if any; changes nothing
@@ -27,10 +32,24 @@ if [ -e "$DEST" ] && [ ! -d "$DEST" ]; then
   exit 2
 fi
 
+# Tracked files under .claude/, minus anything that is machine state rather than repo content.
+# settings.json and settings.local.json are never installed: they carry the user's theme,
+# marketplaces, and permission grants.
+list_sources() {
+  if git -C "$REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    git -C "$REPO" ls-files -z -- .claude | tr '\0' '\n' | sed "s|^|$REPO/|"
+  else
+    # Not a checkout (tarball install): fall back to an explicit allowlist of subtrees.
+    find "$SRC" \( -path '*/agents/*' -o -path '*/commands/*' -o -path '*/hooks/*' \
+      -o -path '*/skills/*' \) -type f
+  fi | grep -v '/__pycache__/' | grep -v '\.pyc$' | grep -v '/settings\(\.local\)\?\.json$' | sort
+}
+
 changed=0
 drift=()
 
 while IFS= read -r file; do
+  [ -f "$file" ] || continue
   rel="${file#"$SRC"/}"
   target="$DEST/$rel"
 
@@ -48,7 +67,7 @@ while IFS= read -r file; do
   [ -x "$file" ] && chmod +x "$target"
   printf '  update  %s\n' "$rel"
   changed=$((changed + 1))
-done < <(find "$SRC" -type f -not -path '*/__pycache__/*' -not -name '*.pyc' | sort)
+done < <(list_sources)
 
 if [ "$CHECK" -eq 1 ]; then
   if [ "${#drift[@]}" -gt 0 ]; then
@@ -62,3 +81,28 @@ if [ "$CHECK" -eq 1 ]; then
 fi
 
 printf '%d files changed in %s\n' "$changed" "$DEST"
+
+# Copying the hook scripts does not activate them: Claude Code only runs hooks listed under the
+# `hooks` key of settings.json. Saying nothing here would leave the whole safety layer — the
+# verification gate, the .agentignore guard, the review nudge — silently inert.
+if ! grep -q '"hooks"' "$DEST/settings.json" 2>/dev/null; then
+  cat <<'NOTE'
+
+The hook scripts are installed but NOT registered, so they will not run yet.
+settings.json is machine state and this installer never writes it. Add to
+your settings.json (merging with what is already there):
+
+  "hooks": {
+    "SessionStart":    [{"matcher": "startup|resume",
+                         "hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/session_start.py\"",   "timeout": 10}]}],
+    "UserPromptSubmit":[{"hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/user_prompt_submit.py\"", "timeout": 5}]}],
+    "PreToolUse":      [{"matcher": "Bash|Read|Edit|Write|MultiEdit|NotebookEdit|NotebookRead",
+                         "hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/pre_tool_use.py\"",   "timeout": 5}]}],
+    "PostToolUse":     [{"matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit|Task|Agent",
+                         "hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/post_tool_use.py\"",  "timeout": 5}]}],
+    "Stop":            [{"hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/stop.py\"",           "timeout": 5}]}]
+  }
+
+Back the file up first. Verify with: bash .claude/hooks/tests/run.sh
+NOTE
+fi

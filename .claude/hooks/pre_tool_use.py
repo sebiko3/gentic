@@ -32,53 +32,108 @@ MUTATING = re.compile(
     r"(^|[|;&]\s*)(rm|mv|cp|dd|install|truncate|chmod|chown|ln)\b"
     r"|\bsed\s+(-[a-zA-Z]*\s+)*-i\b"
     r"|\btee\b"
-    r"|>>?\s*\S",
+    r"|(?<![0-9&])>>?\s*(?![&|])\S",
     re.I,
 )
 
+def _short_flags(argv):
+    """Every letter appearing in a short-flag cluster: ["-f", "-rd"] -> {"f", "r", "d"}."""
+    letters = set()
+    for arg in argv:
+        if arg.startswith("-") and not arg.startswith("--"):
+            letters.update(arg[1:])
+    return letters
+
+
+def is_force_push(argv):
+    if argv[:2] != ["git", "push"]:
+        return False
+    if any(a.startswith("--force-with-lease") for a in argv):
+        return False
+    return "--force" in argv or "f" in _short_flags(argv)
+
+
+def is_hard_reset(argv):
+    return argv[:2] == ["git", "reset"] and "--hard" in argv
+
+
+def is_destructive_clean(argv):
+    """`git clean` that both forces and recurses into directories, and is not a dry run."""
+    if argv[:2] != ["git", "clean"]:
+        return False
+    flags = _short_flags(argv)
+    if "n" in flags or "--dry-run" in argv:
+        return False
+    return ("f" in flags or "--force" in argv) and "d" in flags
+
+
 RULES = [
     (
-        re.compile(r"\bgit\s+push\b(?=.*\s(--force|-f)\b)(?!.*--force-with-lease)", re.I),
+        is_force_push,
         "`git push --force` overwrites remote history irreversibly. "
         "Use `--force-with-lease`, which refuses if someone else has pushed.",
     ),
     (
-        re.compile(r"\bgit\s+reset\s+--hard\b", re.I),
+        is_hard_reset,
         "`git reset --hard` discards uncommitted work with no recovery path. "
         "Stash or commit first, or use `git reset --soft`.",
     ),
     (
-        re.compile(r"\bgit\s+clean\s+-[a-z]*f[a-z]*d|\bgit\s+clean\s+-[a-z]*d[a-z]*f", re.I),
+        is_destructive_clean,
         "`git clean -fd` permanently deletes untracked files, including ones never committed. "
         "Run it with `-n` first to see what would go.",
     ),
 ]
 
-RECURSIVE_RM = re.compile(r"\brm\b[^|;&]*?\s-[a-zA-Z]*(rf|fr|[rR]\s+-f|f\s+-[rR])[a-zA-Z]*\s+(?P<target>[^\s|;&]+)", re.I)
-
 DANGEROUS_TARGETS = re.compile(
     r"^(/|~|~/|\$HOME/?|\$\{HOME\}/?|/Users/[^/]+/?|/home/[^/]+/?|/\*|/etc/?|/usr/?|/var/?)$"
 )
 
+_SEPARATORS = {";", "&", "&&", "|", "||", "\n", "&|"}
 
-_QUOTED = re.compile(r"'[^']*'|\"[^\"]*\"")
 
+def command_argvs(command):
+    """Split a shell line into one argv list per command.
 
-def unquoted(command):
-    """The command with quoted sections blanked out.
+    Deciding on argv is what makes `git reset "--hard"` and `git reset --hard` the same
+    invocation while `echo "git reset --hard"` stays a single argument to echo. The previous
+    approach blanked quoted spans before matching raw text, which got the second case right and
+    the first catastrophically wrong: `rm -rf "$HOME"`, the quoting shellcheck asks for, was
+    invisible to the guard.
 
-    A command that merely *mentions* `git push --force` inside a string is not an invocation
-    of it. Matching the raw text blocked legitimate work (echo, grep, printf, heredocs), which
-    is exactly how a guard earns a reputation for crying wolf and gets disabled.
+    Returns None when the line cannot be tokenised, so the caller can fall back rather than
+    treat an unparseable command as harmless.
     """
-    return _QUOTED.sub(" ", command)
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    argvs, current = [], []
+    try:
+        for token in lexer:
+            if token in _SEPARATORS or set(token) <= {";", "&", "|"} and token:
+                if current:
+                    argvs.append(current)
+                    current = []
+            else:
+                current.append(token)
+    except ValueError:
+        return None
+    if current:
+        argvs.append(current)
+    return argvs
 
 
-def dangerous_rm(command):
-    for match in RECURSIVE_RM.finditer(command):
-        target = match.group("target").strip("'\"")
-        if DANGEROUS_TARGETS.match(target):
-            return target
+def dangerous_rm(argv):
+    """The home or system directory a recursive-force rm would delete, if any."""
+    if not argv or argv[0] != "rm":
+        return None
+    flags = _short_flags(argv)
+    if not (({"r", "R"} & flags) and "f" in flags):
+        return None
+    for arg in argv[1:]:
+        if arg.startswith("-"):
+            continue
+        if DANGEROUS_TARGETS.match(arg):
+            return arg
     return None
 
 
@@ -192,17 +247,25 @@ def main():
     if not command:
         return
 
-    scannable = unquoted(command)
-    for pattern, reason in RULES:
-        if pattern.search(scannable):
-            return deny(reason)
+    argvs = command_argvs(command)
+    if argvs is None:
+        # Unparseable (an unterminated quote, usually). Fall back to splitting the raw text on
+        # separators and stripping quote characters: noisier than real tokenisation, but a
+        # command we cannot parse must never be waved through.
+        argvs = [segment.replace('"', " ").replace("'", " ").split()
+                 for segment in re.split(r"[;&|\n]+", command)]
 
-    target = dangerous_rm(scannable)
-    if target:
-        return deny(
-            f"`rm -rf {target}` would recursively delete a home or system directory. "
-            "Name a specific project path instead."
-        )
+    for argv in argvs:
+        for matches, reason in RULES:
+            if matches(argv):
+                return deny(reason)
+
+        target = dangerous_rm(argv)
+        if target:
+            return deny(
+                f"`rm -rf {target}` would recursively delete a home or system directory. "
+                "Name a specific project path instead."
+            )
 
     reason = check_bash(command, cwd)
     if reason:

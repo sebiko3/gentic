@@ -115,6 +115,51 @@ class InstallContract(unittest.TestCase):
         result = run(dest=target)
         self.assertNotEqual(result.returncode, 0, "installed over a regular file")
 
+    def test_does_not_install_untracked_files(self):
+        """The installer must ship what the repo tracks, not whatever is lying in the tree.
+
+        Claude Code writes project-scoped permission grants to .claude/settings.local.json.
+        Copying that to ~/.claude promotes them to machine scope silently.
+        """
+        planted = REPO / ".claude" / "settings.local.json"
+        planted.write_text('{"permissions": {"allow": ["Bash(rm:*)"]}}\n')
+        self.addCleanup(planted.unlink, True)
+        stray = REPO / ".claude" / "agents" / ".DS_Store"
+        stray.write_bytes(b"\x00")
+        self.addCleanup(stray.unlink, True)
+
+        run(dest=self.dest)
+
+        self.assertFalse((self.dest / "settings.local.json").exists(),
+                         "untracked local settings were promoted to user scope")
+        self.assertFalse((self.dest / "agents/.DS_Store").exists(),
+                         "untracked junk was installed")
+
+    def test_never_installs_a_settings_file_even_if_tracked(self):
+        """settings.json is machine state (theme, marketplaces), never repo-shipped."""
+        source = INSTALL.read_text()
+        self.assertRegex(source, r"settings", "installer does not mention settings at all")
+        run(dest=self.dest)
+        for name in ("settings.json", "settings.local.json"):
+            self.assertFalse((self.dest / name).exists(), f"{name} must never be installed")
+
+    def test_warns_when_hooks_are_not_registered(self):
+        """Hooks copied but unregistered do nothing. That must never be silent."""
+        result = run(dest=self.dest)
+        combined = result.stdout + result.stderr
+        self.assertIn("hooks", combined.lower())
+        self.assertRegex(combined, r"not registered|inert|will not run|won't run",
+                         "install said nothing about the hooks being unregistered")
+        self.assertIn("PreToolUse", combined, "no concrete settings block was printed")
+
+    def test_stays_quiet_when_hooks_are_already_registered(self):
+        (self.dest).mkdir(parents=True, exist_ok=True)
+        (self.dest / "settings.json").write_text(
+            '{"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "x"}]}]}}\n')
+        result = run(dest=self.dest)
+        self.assertNotIn("PreToolUse", result.stdout + result.stderr,
+                         "nagged about hooks that are already registered")
+
     def test_does_not_install_build_artefacts(self):
         run(dest=self.dest)
         junk = [str(p) for p in self.dest.rglob("*") if "__pycache__" in p.parts or p.suffix == ".pyc"]
