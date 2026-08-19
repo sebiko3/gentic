@@ -20,11 +20,13 @@ Execute turns the masterprompt into a task plan, then delivers it one verified, 
 
 ## Per-task loop
 
-1. **Failing test first.** If superpowers:test-driven-development is available, you MUST invoke it. Otherwise the inline rule holds: write the test, watch it fail, then implement.
-2. Implement the smallest change that passes.
-3. Verify locally (task's tests + suite affected by the change).
-4. Tick the task's Status in `progress.md`.
-5. Checkpoint commit, one task per commit. Subject from `python3 "$HOME/.claude/hooks/lib/project_conventions.py" commit "<slug>" "<summary>"` — `gentic(<slug>): <task summary>` in an adopted repo, the plain summary in any other project.
+1. **Invoke `gentic-tdd` and follow it.** It carries the Iron Law — no production code without a failing test first — and the rules for tasks with no executable behaviour. Every task goes through it; there is no fast path for small ones.
+2. Take the task's test from the masterprompt: the DoD item it serves already names the test file, the test name and the failure to expect. If reality contradicts that contract, that is drift — see below.
+3. Watch the test fail, and **paste the actual failure into the task's `RED` cell** in `progress.md`. A trimmed assertion message is enough; invented text is not.
+4. Implement the smallest change that passes.
+5. Verify locally (task's tests + suite affected by the change).
+6. Tick the task's Status in `progress.md`. **A task with an empty `RED` cell is not done** — the cell, not your memory, is what a resumed session reads. `n/a` is legal only for a task that changes nothing observable, and must carry its reason.
+7. Checkpoint commit, one task per commit. Subject from `python3 "$HOME/.claude/hooks/lib/project_conventions.py" commit "<slug>" "<summary>"` — `gentic(<slug>): <task summary>` in an adopted repo, the plain summary in any other project.
 
 ## When blocked on a missing decision
 
@@ -56,4 +58,6 @@ Dispatch `task-executor`, one instance per task, under this contract. A fan-out 
 | Batching several tasks into one commit | One task, one commit — resume depends on it |
 | Pushing through when the spec is wrong | Spec drift is iterate's job; executing a wrong spec is negative work |
 | Silent judgment calls on blockers | Every unplanned decision lands in decisions.md, flagged |
-| Marking a task done because code exists | Done = its test passed; evidence, not existence |
+| Marking a task done because code exists | Done = its test failed first, then passed; evidence, not existence |
+| Ticking a task with an empty RED cell | The evidence is the deliverable; go back and watch the test fail |
+| Writing the test after, "to save a step" | A test written after passes immediately and proves nothing |
