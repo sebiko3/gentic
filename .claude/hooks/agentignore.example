@@ -1,0 +1,25 @@
+# .agentignore — what Claude may read and modify in this project.
+# Copy to your repo root (or any subfolder) and edit. Nearer files win.
+#
+# This is an accident-preventer, not a security boundary. See ~/.claude/hooks/README.md.
+
+# Bare patterns: no read, no write.
+secrets/
+*.pem
+*.key
+.env
+.env.*
+
+# Readable, but never modified by Claude.
+[read-only]
+vendor/
+third_party/
+migrations/
+package-lock.json
+
+# Writable, but never read (e.g. output Claude fills but shouldn't inspect).
+[no-read]
+tmp/scratch/
+
+# Re-allow a specific path that an earlier rule caught.
+!secrets/README.md
