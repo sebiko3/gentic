@@ -84,7 +84,19 @@ Exit 0 with no `FAIL` lines means every hook is behaving.
 
 ## Rollback
 
-Restore the configuration that existed before this layer:
+Two backups exist, one per change to `settings.json`. Restore the most recent one to undo the
+last change only:
+
+```bash
+cp ~/.claude/settings.json.bak-2026-08-19 ~/.claude/settings.json
+```
+
+That reverts the 2026-08-19 changes — the widened `PostToolUse` matcher
+(`…|Task|Agent`, which lets `post_tool_use.py` see review subagents) and the removal of the
+`pr-review-toolkit@claude-plugins-official` entry, which was enabled but whose recorded
+`installPath` did not exist, so its agents never resolved.
+
+To remove the whole hooks layer instead, restore the backup from before it existed:
 
 ```bash
 cp ~/.claude/settings.json.bak-2026-08-17 ~/.claude/settings.json
