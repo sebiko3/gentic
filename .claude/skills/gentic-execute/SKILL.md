@@ -16,7 +16,7 @@ Execute turns the masterprompt into a task plan, then delivers it one verified, 
 1. Derive tasks from the masterprompt's Definition of Done — every DoD item must be covered by at least one task.
 2. Size each task in fibonacci points: 1, 2, 3, 5, or 8. **A task estimated above 8 must be split** — if it can't be split, the masterprompt is under-specified (return to it). Sizes are planning estimates only; they never deduct from the iteration budget (only gentic-iterate's rungs spend that).
 3. Order by dependencies first, then riskiest-first: do the task most likely to invalidate the plan early, while changing course is cheap.
-4. Write the table into `progress.md`. If still on the default branch, create `gentic/<slug>` now — checkpoints never land on main.
+4. Write the table into `progress.md`. If still on the default branch, create a work branch now — checkpoints never land on main. Get its name from the helper, because the convention belongs to the project rather than to gentic: `python3 "$HOME/.claude/hooks/lib/project_conventions.py" branch "<slug>"`. An adopted repo gets `gentic/<slug>`; any other project gets its own prefix, or a bare slug. If the helper errors, use the bare slug and continue.
 
 ## Per-task loop
 
@@ -24,7 +24,7 @@ Execute turns the masterprompt into a task plan, then delivers it one verified, 
 2. Implement the smallest change that passes.
 3. Verify locally (task's tests + suite affected by the change).
 4. Tick the task's Status in `progress.md`.
-5. Checkpoint commit: `gentic(<slug>): <task summary>`. One task, one commit.
+5. Checkpoint commit, one task per commit. Subject from `python3 "$HOME/.claude/hooks/lib/project_conventions.py" commit "<slug>" "<summary>"` — `gentic(<slug>): <task summary>` in an adopted repo, the plain summary in any other project.
 
 ## When blocked on a missing decision
 

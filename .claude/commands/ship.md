@@ -40,8 +40,12 @@ If the branch is `main`, `master`, `develop`, or the repo's default branch, **do
 Create and switch to a work branch first, named from the change:
 
 ```bash
-git checkout -b gentic/<slug>
+BRANCH=$(python3 "$HOME/.claude/hooks/lib/project_conventions.py" branch "<slug>")
+git checkout -b "$BRANCH"
 ```
+
+The helper names the branch the way *this project* does: `gentic/<slug>` only in an adopted
+repo, the project's own dominant prefix otherwise, and a bare slug when it has none. If it errors or is absent, fall back to the bare slug — never impose `gentic/`.
 
 If a gentic run directory exists for this work, reuse its slug so branch and artifacts match.
 

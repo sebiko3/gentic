@@ -13,7 +13,8 @@ Gentic turns a vague request into verified, done work through five gated phases.
 
 **Read `ROUTING.md` in this skill's directory first.** It carries the machine-wide rules that the
 gentic repo keeps in its project `CLAUDE.md` — where artifacts go when the repo is not ours, and the
-hard limits on committing during a run (`gentic/<slug>` branch only; never push, never open a PR).
+hard limits on committing during a run (a dedicated work branch only, named by the project's own
+convention via `project_conventions.py`; never push, never open a PR).
 
 ## Phase map
 
@@ -31,7 +32,7 @@ hard limits on committing during a run (`gentic/<slug>` branch only; never push,
 2. Create the run directory: `docs/gentic/<YYYY-MM-DD>-<slug>/` (today's date).
 3. Write `progress.md` in it from the template below.
 4. Invoke `gentic-scout` with the Skill tool. Follow each phase skill exactly.
-5. Between phases: verify the gate from the table above, tick the phase box in `progress.md`, commit the run directory (`gentic(<slug>): <phase> gate`), then invoke the next phase's skill. During Execute, progress ticks ride inside each task's checkpoint commit instead. After Execute, `gentic-iterate` owns control flow until the run is done or stopped — it may re-enter earlier phases via its escalation ladder.
+5. Between phases: verify the gate from the table above, tick the phase box in `progress.md`, commit the run directory (subject from `project_conventions.py commit`: `gentic(<slug>): <phase> gate` in an adopted repo, `<phase> gate` elsewhere), then invoke the next phase's skill. During Execute, progress ticks ride inside each task's checkpoint commit instead. After Execute, `gentic-iterate` owns control flow until the run is done or stopped — it may re-enter earlier phases via its escalation ladder.
 
 ## Resuming a run
 

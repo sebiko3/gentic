@@ -229,6 +229,35 @@ class ReviewFixture(unittest.TestCase):
             self.assertIn(symbol, text)
 
 
+class NamingIsProjectScoped(unittest.TestCase):
+    """gentic's own naming must never read as a universal rule.
+
+    `gentic/<slug>` and `gentic(<slug>)` were stated unconditionally in the skills and in
+    /ship, so every repository got them whether or not it had adopted the workflow. Each
+    surviving occurrence must sit on a line that marks it conditional.
+
+    CLAUDE.md is exempt: its unqualified copy of the rule IS the adoption marker the helper
+    looks for, so qualifying it would un-adopt this repository.
+    """
+
+    CONDITIONAL = re.compile(r"adopted|project_conventions|this repo", re.I)
+
+    def test_no_hardcoded_naming_reads_as_universal(self):
+        offenders = []
+        for path in sorted((CLAUDE / "skills").rglob("*.md")) + sorted((CLAUDE / "commands").glob("*.md")):
+            for number, line in enumerate(lines_of(path), 1):
+                if "gentic/<slug>" not in line and "gentic(<slug>)" not in line:
+                    continue
+                if not self.CONDITIONAL.search(line):
+                    offenders.append(f"{path.relative_to(REPO)}:{number}: {line.strip()[:88]}")
+        self.assertEqual(offenders, [], "naming stated unconditionally:\n" + "\n".join(offenders))
+
+    def test_the_adoption_marker_in_claude_md_stays_unqualified(self):
+        text = (REPO / "CLAUDE.md").read_text(encoding="utf-8")
+        self.assertIn("gentic/<slug>", text,
+                      "the adoption marker was removed; this repo would stop being adopted")
+
+
 class CommandDefinitions(unittest.TestCase):
     def test_every_command_has_a_description(self):
         for path in sorted((CLAUDE / "commands").glob("*.md")):

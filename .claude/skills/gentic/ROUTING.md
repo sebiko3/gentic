@@ -35,9 +35,25 @@ that a task is trivial.
 Entering Execute is the explicit request that authorises checkpoint commits — but only under
 these limits, which exist because `~/.claude/CLAUDE.md` otherwise forbids unrequested commits:
 
-- Checkpoint commits land **only** on a `gentic/<slug>` branch. Create it before the first
-  commit. **Never commit to `main`, `master`, or whatever branch the user was already on.**
-- One task, one commit: `gentic(<slug>): <task summary>`.
+- Checkpoint commits land **only** on a dedicated work branch, never on `main`, `master`, or
+  whatever branch the user was already on. **Ask the helper what to call it** — the name belongs
+  to the project, not to gentic:
+
+  ```bash
+  python3 "$HOME/.claude/hooks/lib/project_conventions.py" branch "<slug>"
+  ```
+
+  In a repo that has adopted gentic this prints `gentic/<slug>`; in one that has not, it prints
+  the project's own dominant branch prefix, or a bare slug when it has none. If the helper is
+  missing or errors, use the bare slug and carry on — it must never stop a run.
+- One task, one commit. The subject comes from the same helper:
+
+  ```bash
+  python3 "$HOME/.claude/hooks/lib/project_conventions.py" commit "<slug>" "<summary>"
+  ```
+
+  Adopted repos get `gentic(<slug>): <task summary>`; everywhere else the summary is used
+  plain, with no gentic wrapper in another project's history.
 - **Never push and never open a PR as part of a run.** That is `/ship`'s job, and `/ship` only
   runs when the user types it.
 

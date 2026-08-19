@@ -90,6 +90,33 @@ workflow is markdown with no dependencies.
 
 Works standalone; if the [superpowers](https://github.com/obra/superpowers) plugin is installed, gentic composes with it (TDD, systematic debugging, verification gates) at marked points.
 
+## Adopting gentic in a project
+
+gentic names its own branches `gentic/<slug>` and its own commits `gentic(<slug>): …` — but
+only in projects that asked for it. Everywhere else it follows the conventions already in the
+repository, because a workflow that renames your branches is a workflow you uninstall.
+
+A project counts as **adopted** when its root `CLAUDE.md` contains the literal string
+`gentic/<slug>` — which it does automatically if you copied the **Routing** and **Conventions**
+sections from [CLAUDE.md](CLAUDE.md) as the install instructions describe.
+
+In any other project the branch prefix is read from the branches already there:
+
+| the project's branches | gentic uses |
+|---|---|
+| `feat/…` ×3, `fix/…` ×2 | `feat/<slug>`, and plain commit subjects |
+| `main`, `websockets` | `<slug>`, and plain commit subjects |
+| a tie, or a prefix seen once | `<slug>` — inventing a convention is the bug being avoided |
+
+Ask it directly at any time:
+
+```bash
+python3 ~/.claude/hooks/lib/project_conventions.py branch my-slug
+```
+
+The helper only *prints* a name; it never creates a branch, never writes to a `CLAUDE.md`, and
+never fails a run — if anything goes wrong it falls back to the bare slug.
+
 ## Verifying the setup
 
 ```bash
