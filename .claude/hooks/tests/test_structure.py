@@ -31,7 +31,13 @@ EXTERNAL_AGENTS = {
     "code-simplifier",
 }
 
-QUALIFIER = re.compile(r"\boptional(ly)?\b|\bif available\b|\bif installed\b|\bis available\b|\bunavailable\b", re.I)
+# Phrases that mark a reference as conditional. Must appear on the same line as the reference:
+# a qualifier a paragraph away does not stop a reader treating the line as a hard dependency.
+QUALIFIER = re.compile(
+    r"\boptional(ly)?\b|\b(if|when|where)\s+(that\s+|the\s+)?\w*\s*(is\s+)?"
+    r"(available|installed|present)\b|\bis\s+(available|installed)\b|\bunavailable\b|\bnot installed\b",
+    re.I,
+)
 
 BACKTICKED = re.compile(r"`([a-z][a-z0-9]*(?:-[a-z0-9]+)+)`")
 SUPERPOWERS_REF = re.compile(r"superpowers:([a-z][a-z0-9-]*)")
@@ -121,6 +127,16 @@ class ResolvableReferences(unittest.TestCase):
                 if not QUALIFIER.search(line):
                     offenders.append(f"{path.relative_to(REPO)}:{number}: {line.strip()[:90]}")
         self.assertEqual(offenders, [], "external agents referenced as if they exist:\n" + "\n".join(offenders))
+
+    def test_the_original_ship_line_would_still_be_caught(self):
+        """Guards the qualifier vocabulary against being widened until it accepts anything.
+
+        This is verbatim the line that shipped broken: three plugin agents named as the primary
+        review path, with nothing marking the plugin as optional.
+        """
+        original = ("Invoke the `pr-review-toolkit` review agents over the diff "
+                    "(`code-reviewer`, plus `silent-failure-hunter` and `pr-test-analyzer`).")
+        self.assertIsNone(QUALIFIER.search(original), "qualifier regex now accepts the original defect")
 
     def test_first_party_agent_references_resolve(self):
         offenders = []

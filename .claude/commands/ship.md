@@ -59,9 +59,12 @@ the change affects them.
 
 ## 4. Review
 
-Invoke the `pr-review-toolkit` review agents over the diff (`code-reviewer`, plus
-`silent-failure-hunter` and `pr-test-analyzer` when the change warrants them). If that plugin is
-unavailable, invoke `superpowers:requesting-code-review` instead.
+Run `/review` over the diff. It dispatches `code-reviewer`, and `dod-auditor` as well when a
+gentic run directory backs this work.
+
+Two optional extras, neither required — the first-party agents are the review:
+`silent-failure-hunter` and `pr-test-analyzer`, if the `pr-review-toolkit` plugin is installed;
+and `superpowers:requesting-code-review`, if that plugin is available.
 
 Act on findings before continuing. Findings you deliberately decline must appear in the PR body —
 never drop them silently.

@@ -92,9 +92,9 @@ cp ~/.claude/settings.json.bak-2026-08-19 ~/.claude/settings.json
 ```
 
 That reverts the 2026-08-19 changes — the widened `PostToolUse` matcher
-(`…|Task|Agent`, which lets `post_tool_use.py` see review subagents) and the removal of the
-`pr-review-toolkit@claude-plugins-official` entry, which was enabled but whose recorded
-`installPath` did not exist, so its agents never resolved.
+(`…|Task|Agent`, which lets `post_tool_use.py` see review subagents) and the removal of an
+`enabledPlugins` entry for the optional `pr-review-toolkit@claude-plugins-official`, which was
+enabled but whose recorded `installPath` did not exist, so its agents never resolved.
 
 To remove the whole hooks layer instead, restore the backup from before it existed:
 

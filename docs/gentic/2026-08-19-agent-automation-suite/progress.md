@@ -18,7 +18,7 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 | 4 | The four agent files under `.claude/agents/` | 5 | 3 | done |
 | 5 | Review nudge: `post_tool_use` review signal + `stop.py` advisory (test-first) | 5 | 1 | done |
 | 6 | `settings.json`: drop phantom entry, widen matcher, backup + rollback doc | 2 | 5 | done |
-| 7 | `/review` command; rewrite `/ship` §4 to first-party agents | 2 | 4 | pending |
+| 7 | `/review` command; rewrite `/ship` §4 to first-party agents | 2 | 4 | done |
 | 8 | gentic skills: dispatch contract, `masterprompt-critic`, `dod-auditor` | 3 | 4 | pending |
 | 9 | README: agents section, installer usage, remove superseded install text | 2 | 2,4 | pending |
 | 10 | Seeded-defect fixture for `code-reviewer` | 1 | 4 | pending |
