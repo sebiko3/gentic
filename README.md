@@ -43,17 +43,58 @@ Every artifact lives in `docs/gentic/<date>-<slug>/` and is committed, so **any 
 
 The costs grow super-linearly because each rung discards more prior work — and the budget forces a real decision between many small fixes and one deep rethink.
 
+## The agents
+
+Four subagents, each closing a gap the workflow had left to improvisation. All four are plain
+markdown in [.claude/agents/](.claude/agents); the three reviewing ones are given read-only
+tool sets, so they structurally cannot edit what they judge.
+
+| Agent | Fires when | What makes it useful |
+|-------|-----------|----------------------|
+| [`code-reviewer`](.claude/agents/code-reviewer.md) | `/review`, `/ship`, or the Stop-hook nudge | Correctness, security, and silent failures — scored 0-100 and **reported only at ≥80**. A reviewer that reports everything gets skimmed and then ignored. |
+| [`dod-auditor`](.claude/agents/dod-auditor.md) | the Iterate phase, before any completion claim | Runs each Definition-of-Done check literally and returns PROVEN / FAILED / **UNVERIFIABLE**. It may never edit a DoD item to make it pass, and never rounds unverifiable up to proven. |
+| [`masterprompt-critic`](.claude/agents/masterprompt-critic.md) | the Masterprompt critique pass | Gets the spec and nothing else — no brief, no decisions, no conversation. That withheld context is the instrument: it occupies the position of the agent who executes this after a compaction. |
+| [`task-executor`](.claude/agents/task-executor.md) | Execute fan-out, on independent 3+ point tasks | Does one task test-first and returns a fixed evidence block. Refuses a vague assignment instead of guessing — it has no channel back to the user, so improvising is how a fan-out produces four readings of one spec. |
+
+Review is no longer something you have to remember. When a session has changed code and no
+review has run, the Stop hook prints a one-line suggestion — advisory, never blocking, once per
+session. The verification gate stays the setup's only hard block.
+
 ## Install
 
-Copy two things into any repository:
-
 ```bash
-cp -R .claude/skills/gentic* /path/to/your/repo/.claude/skills/
+./install.sh
 ```
 
-Then add the **Routing** section from this repo's [CLAUDE.md](CLAUDE.md) to your repo's `CLAUDE.md`. That's the whole install — gentic is markdown, no dependencies.
+That copies this repo's `.claude/` — skills, agents, hooks, commands — into `~/.claude/`, so
+the setup applies to every project, not just this one. It is idempotent, and it only ever
+writes the files this repo ships: your own skills, agents, sessions, and plugins are never
+touched, and there is no `rm -rf` or `--delete` anywhere in it.
+
+```bash
+./install.sh --check
+```
+
+Reports any file that has drifted from the repo and exits non-zero, changing nothing.
+
+For gentic alone, without the hooks and agents, copy `.claude/skills/gentic*` into your repo's
+skills directory and add the **Routing** section from [CLAUDE.md](CLAUDE.md) to your own — the
+workflow is markdown with no dependencies.
 
 Works standalone; if the [superpowers](https://github.com/obra/superpowers) plugin is installed, gentic composes with it (TDD, systematic debugging, verification gates) at marked points.
+
+## Verifying the setup
+
+```bash
+bash .claude/hooks/tests/run.sh
+```
+
+Exit 0 with no `FAIL` lines means the hooks behave, the installer is safe, and the setup is
+structurally sound — every agent's frontmatter parses, and every skill, command, agent, and
+hook that anything references actually exists. That last check is not hypothetical: this repo
+shipped a `/ship` command that invoked three agents from a plugin whose recorded install
+directory did not exist. Nothing errored; review just quietly fell back to less than it
+claimed. `test_structure.py` exists so that class of defect cannot pass unnoticed again.
 
 ## Use
 
@@ -73,7 +114,8 @@ This repository built itself with its own workflow — see [docs/gentic/2026-08-
 ## Design notes
 
 - **Why five phases instead of "questions → masterprompt → iterate"?** The original three-phase shape lacks grounding (questions asked from ignorance are generic) and an anchor for iteration (without a checkable Definition of Done, iteration spins). Scout makes questions sharp; the DoD makes iteration converge.
-- **Why not multi-agent-first?** Subagent fan-out is an execution optimization, not a workflow. gentic stays single-threaded by default (cheap, debuggable, no opt-in friction); subagents are optional optimizations — independent 3+ point tasks during Execute, a fresh-eyes critic on the masterprompt — when available.
+- **Why not multi-agent-first?** Subagent fan-out is an execution optimization, not a workflow. gentic stays single-threaded by default (cheap, debuggable, no opt-in friction). The four agents are optional accelerants at named points, and each earns its place by being *worse informed* than the main thread in a useful way: `masterprompt-critic` is denied the conversation, `dod-auditor` is denied the author's confidence, `task-executor` is denied the neighbouring tasks. An agent that merely knows what you already know adds cost, not signal.
+- **Why a nudge instead of a gate?** The setup has exactly one hard block — a completion claim with no verification behind it. That scarcity is what makes it credible. Everything else, review included, advises and gets out of the way; a second blocker would turn the setup into something to work around.
 - **Why files instead of memory?** Context windows end; `docs/gentic/` doesn't. The masterprompt's quality bar — "a stranger could deliver from this file alone" — is also exactly what a post-compaction session needs.
 
 ## License
