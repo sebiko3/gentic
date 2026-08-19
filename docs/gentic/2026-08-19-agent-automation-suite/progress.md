@@ -13,7 +13,7 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 | # | Task | Size | Depends on | Status (pending/in progress/done) |
 |---|------|------|------------|--------|
 | 1 | Record baselines; import hooks/commands/ROUTING.md into repo; `.gitignore` | 3 | — | done |
-| 2 | `install.sh` with `--check` and ownership safety (test-first) | 5 | 1 | pending |
+| 2 | `install.sh` with `--check` and ownership safety (test-first) | 5 | 1 | done |
 | 3 | `tests/test_structure.py`: agent frontmatter, resolvable refs, plugin cross-check | 5 | 1 | pending |
 | 4 | The four agent files under `.claude/agents/` | 5 | 3 | pending |
 | 5 | Review nudge: `post_tool_use` review signal + `stop.py` advisory (test-first) | 5 | 1 | pending |
