@@ -1,13 +1,13 @@
 # Run: tdd-spec-first
 Goal: Make TDD and spec-driven development the enforced backbone of the gentic workflow, superpowers-style.
-Iteration budget: 13 remaining (rungs spend it; task sizes never do)
+Iteration budget: 13 of 13 remaining — no escalation rung was spent.
 
 ## Phases
 - [x] 1 Scout
 - [x] 2 Interview
 - [x] 3 Masterprompt
 - [x] 4 Execute
-- [ ] 5 Iterate
+- [x] 5 Iterate
 
 ## Tasks
 | # | Task | Size | Depends on | Test | RED | Status |
@@ -26,6 +26,27 @@ Sizes are planning estimates only; they never spend the iteration budget.
 ## Iteration log
 | # | DoD item | Rung | Points | Result |
 |---|----------|------|--------|--------|
+| 1 | D1 gentic-tdd skill self-contained | — | 0 | PROVEN — `test_structure.py TestFirstSpine.test_gentic_tdd_skill_is_self_contained` → OK |
+| 2 | D2 Execute routes tasks through gentic-tdd | — | 0 | PROVEN — `…test_execute_routes_tasks_through_tdd` → OK |
+| 3 | D3 masterprompt requires test contracts | — | 0 | PROVEN — `…test_masterprompt_requires_test_contracts` → OK |
+| 4 | D4 task table has Test and RED columns | — | 0 | PROVEN — `…test_task_table_template_has_tdd_columns` → OK |
+| 5 | D5 failing verification recorded as RED | — | 0 | PROVEN — `test_tdd.py RedLedger.test_failing_verification_is_recorded_as_red` → OK |
+| 6 | D6 test files classified, code_changed preserved | — | 0 | PROVEN — `…TestFileClassification.test_test_files_are_classified_separately` → OK |
+| 7 | D7 TDD nudge advisory, never blocks | — | 0 | PROVEN — `…TddNudge.test_tdd_nudge_is_advisory` → OK (exit 0) |
+| 8 | D8 nudge suppressed and once per session | — | 0 | PROVEN — `…TddNudge.test_tdd_nudge_suppressed_and_bounded` → OK |
+| 9 | D9 README and CLAUDE.md document the spine | — | 0 | PROVEN — `…test_docs_document_the_tdd_spine` → OK (both docs) |
+| 10 | D10 whole harness green, 7 skills, latency held | — | 0 | PROVEN — `bash .claude/hooks/tests/run.sh` → exit 0, all checks passed, 217 tests, medians 24.7 / 25.2 ms |
+| 11 | D11 superpowers refs still conditional | — | 0 | PROVEN — `test_structure.py -k superpowers` → OK |
+| 12 | D12 install path handles the seventh skill | — | 0 | PROVEN — `./install.sh --check` → lists `skills/gentic-tdd/SKILL.md` and `hooks/tests/test_tdd.py` as missing, exit 1, nothing written |
+
+Verification ran the checks directly rather than through `dod-auditor`: this session is configured
+not to dispatch subagents unless the user asks. The same rule was applied — every check run
+literally, unverifiable treated as non-pass. `masterprompt-critic` was replaced the same way, by a
+second five-scan pass reading only the spec.
+
+Budget: 13 of 13 remaining — no rung was needed. The one mid-run defect (the TDD nudge silencing
+the review nudge) was caught by the existing suite during Execute, which is plan drift, not a DoD
+failure.
 
 ## Notes / handoff
 
