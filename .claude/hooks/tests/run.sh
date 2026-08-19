@@ -11,7 +11,7 @@ pass() { printf '  ok    %s\n' "$1"; }
 fail() { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; FAILURES=$((FAILURES + 1)); }
 
 section "Unit and contract suites"
-for suite in test_lib test_classifier test_gate test_guard_and_session test_agentignore test_install test_structure test_review_nudge test_destructive_guard; do
+for suite in test_lib test_classifier test_gate test_guard_and_session test_agentignore test_install test_structure test_review_nudge test_destructive_guard test_project_conventions; do
   if out=$(cd "$HOOKS" && python3 "tests/$suite.py" 2>&1); then
     pass "$suite ($(printf '%s' "$out" | grep -oE 'Ran [0-9]+ tests' | head -1))"
   else

@@ -12,7 +12,7 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 ## Tasks
 | # | Task | Size | Depends on | Status (pending/in progress/done) |
 |---|------|------|------------|--------|
-| 1 | `lib/project_conventions.py` + `tests/test_project_conventions.py`, wired into `run.sh:14` | 5 | — | pending |
+| 1 | `lib/project_conventions.py` + `tests/test_project_conventions.py`, wired into `run.sh:14` | 5 | — | done |
 | 2 | `test_structure.py` case: neither hardcoded form survives unconditionally (DoD 8) | 2 | 1 | pending |
 | 3 | Rewrite the 4 branch sites and 4 commit sites in skills and `/ship` (DoD 9, 10) | 3 | 1 | pending |
 | 4 | README section on marking a project adopted (DoD 13) | 1 | 1 | pending |
