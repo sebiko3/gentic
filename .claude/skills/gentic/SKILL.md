@@ -11,6 +11,10 @@ Gentic turns a vague request into verified, done work through five gated phases.
 
 **Core principle: no phase before Execute produces code, and no phase is skipped once a run starts.**
 
+**Read `ROUTING.md` in this skill's directory first.** It carries the machine-wide rules that the
+gentic repo keeps in its project `CLAUDE.md` — where artifacts go when the repo is not ours, and the
+hard limits on committing during a run (`gentic/<slug>` branch only; never push, never open a PR).
+
 ## Phase map
 
 | # | Phase | Skill | Artifact | Gate to advance |

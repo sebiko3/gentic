@@ -1,6 +1,6 @@
 # Run: agent-automation-suite
 Goal: New subagents plus an improved automation workflow for code review, orchestration, and spec-driven development, across all projects.
-Iteration budget: 13 remaining (rungs spend it; task sizes never do)
+Iteration budget: 11 remaining (2 spent) (rungs spend it; task sizes never do)
 
 ## Phases
 - [x] 1 Scout
@@ -30,6 +30,8 @@ Coverage: every DoD item is claimed by at least one task —
 ## Iteration log
 | # | DoD item | Rung | Points | Result |
 |---|----------|------|--------|--------|
+| 1 | DoD 2 — `grep -rn pr-review-toolkit` returned 5 unqualified lines, all inside `test_structure.py` itself. Root cause: the check is defined over a file set that includes the checker, which must contain the literal it searches for. Fixed by hoisting it to an `OPTIONAL_PLUGIN` constant and qualifying the remaining prose. DoD item untouched. | 1 | 1 | fixed — grep now returns 4 lines, all qualified |
+| 2 | (no DoD item covered this) Regression caused by this run: task 1 imported `ROUTING.md` into the repo but not the global `gentic/SKILL.md`, which had diverged and carried the "Read ROUTING.md first" instruction. `install.sh` then propagated the stale repo copy outward, orphaning the file. Blast radius confirmed as exactly one paragraph by accounting for all 20 files the first install touched. Restored, plus a `NoOrphanedSkillFiles` guard. | 1 | 1 | fixed — pointer restored, live setup re-synced |
 
 ## Notes / handoff
 

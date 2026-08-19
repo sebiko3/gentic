@@ -3,8 +3,9 @@
 
 Markdown agents, skills, and commands cannot be unit-tested by running them, but they can be
 checked for the defect class that actually bit this setup: a reference to something that does
-not exist. `settings.json` enabled a `pr-review-toolkit` that was never installed, and
-`/ship` invoked three of its agents; nothing failed loudly, review just silently degraded.
+not exist. `settings.json` enabled an optional review plugin whose recorded install directory
+was missing, and `/ship` invoked three of its agents as if they were the primary path; nothing
+failed loudly, review just silently degraded.
 
 Every rule below exists to make that specific failure impossible to reintroduce.
 """
@@ -21,8 +22,9 @@ AGENTS = CLAUDE / "agents"
 
 EXPECTED_AGENTS = {"code-reviewer", "dod-auditor", "masterprompt-critic", "task-executor"}
 
-# Agents shipped by the pr-review-toolkit plugin, which this setup deliberately does not depend
-# on. Naming one without marking it optional is the exact bug this suite guards against.
+# The optional review plugin this setup deliberately does not depend on, and the agents it
+# ships. Naming any of them without marking them optional is the exact bug this suite guards.
+OPTIONAL_PLUGIN = "pr-review-toolkit"  # optional; nothing in this setup requires it
 EXTERNAL_AGENTS = {
     "silent-failure-hunter",
     "pr-test-analyzer",
@@ -122,7 +124,7 @@ class ResolvableReferences(unittest.TestCase):
         offenders = []
         for path in markdown_files():
             for number, line in enumerate(lines_of(path), 1):
-                if "pr-review-toolkit" not in line and not (EXTERNAL_AGENTS & set(BACKTICKED.findall(line))):
+                if OPTIONAL_PLUGIN not in line and not (EXTERNAL_AGENTS & set(BACKTICKED.findall(line))):
                     continue
                 if not QUALIFIER.search(line):
                     offenders.append(f"{path.relative_to(REPO)}:{number}: {line.strip()[:90]}")
@@ -134,7 +136,7 @@ class ResolvableReferences(unittest.TestCase):
         This is verbatim the line that shipped broken: three plugin agents named as the primary
         review path, with nothing marking the plugin as optional.
         """
-        original = ("Invoke the `pr-review-toolkit` review agents over the diff "
+        original = (f"Invoke the `{OPTIONAL_PLUGIN}` review agents over the diff "
                     "(`code-reviewer`, plus `silent-failure-hunter` and `pr-test-analyzer`).")
         self.assertIsNone(QUALIFIER.search(original), "qualifier regex now accepts the original defect")
 
@@ -227,6 +229,26 @@ class SkillDefinitions(unittest.TestCase):
                 self.assertTrue(fields.get("description"), "no description")
 
 
+class NoOrphanedSkillFiles(unittest.TestCase):
+    """A file shipped inside a skill that its SKILL.md never mentions is invisible.
+
+    `ROUTING.md` was exactly that: installed alongside the gentic skill, carrying the
+    machine-wide rules, and referenced by nothing after a stale repo copy overwrote the live
+    SKILL.md. Nothing failed — the rules simply stopped being read.
+    """
+
+    def test_every_shipped_skill_file_is_referenced_by_its_skill_md(self):
+        orphans = []
+        for skill_md in sorted((CLAUDE / "skills").glob("*/SKILL.md")):
+            body = skill_md.read_text(encoding="utf-8")
+            for sibling in sorted(skill_md.parent.rglob("*")):
+                if not sibling.is_file() or sibling.name == "SKILL.md":
+                    continue
+                if sibling.name not in body:
+                    orphans.append(f"{sibling.relative_to(REPO)} is never mentioned by {skill_md.relative_to(REPO)}")
+        self.assertEqual(orphans, [], "orphaned skill files:\n" + "\n".join(orphans))
+
+
 class LiveMachineConfig(unittest.TestCase):
     """Checks the installed machine, not the repo. Skips where that machine is not this one."""
 
@@ -240,9 +262,9 @@ class LiveMachineConfig(unittest.TestCase):
     def test_no_enabled_plugin_is_uninstalled(self):
         """Registry membership is not installation.
 
-        `pr-review-toolkit` was listed in installed_plugins.json with an installPath that did
-        not exist on disk, so its agents silently failed to resolve. Checking the key alone
-        would have called that healthy.
+        The optional review plugin was listed in installed_plugins.json with an installPath
+        that did not exist on disk, so its agents silently failed to resolve. Checking the key
+        alone would have called that healthy.
         """
         enabled = json.loads(self.settings.read_text()).get("enabledPlugins", {})
         registry = json.loads(self.installed.read_text()).get("plugins", {})
