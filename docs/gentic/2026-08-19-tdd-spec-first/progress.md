@@ -6,7 +6,7 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 - [x] 1 Scout
 - [x] 2 Interview
 - [x] 3 Masterprompt
-- [ ] 4 Execute
+- [x] 4 Execute
 - [ ] 5 Iterate
 
 ## Tasks
