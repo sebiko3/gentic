@@ -37,7 +37,17 @@ Never improvise silently. If interactive: a single AskUserQuestion call (a mini-
 
 ## Optional parallelism
 
-Independent tasks of 3+ points may be dispatched to subagents when available. Each subagent gets: the full `masterprompt.md`, its single task, and the instruction to return evidence of verification. Use worktree isolation if tasks touch overlapping files. Never parallelize dependent tasks.
+Independent tasks of 3+ points may be dispatched to subagents when available. Never parallelize dependent tasks, and never fan out before the riskiest task has landed — cheap course correction is worth more than concurrency.
+
+Dispatch `task-executor`, one instance per task, under this contract. A fan-out without it produces several incompatible readings of the same spec, which costs more to reconcile than it saved.
+
+**Receives:** the full `masterprompt.md` (not a summary — the non-goals are what stop it over-building), exactly one task from the table, the DoD items that task serves, its verification command, and the files it owns. Anything missing is the parent's bug, not the worker's.
+
+**Returns:** the fixed report block in the agent's own definition — `status`, files changed, the test written, the RED failure observed, the GREEN command with its real output, the broader suite result, non-goals honoured, and anything noticed but not fixed. A `done` without a `green` line containing real output is not `done`.
+
+**Parent merges by:** re-running each worker's verification command itself before believing it, then running the full affected suite once over the combined result — a worker's green proves its own change, not the merge. Then tick the task table and make one checkpoint commit per task, in dependency order. Workers never commit; the parent owns history. A `blocked` or `assignment unclear` return means the task breakdown was wrong: fix the table before re-dispatching, never re-send the same brief.
+
+**Isolation required when:** two concurrently dispatched tasks can touch the same file, or a task runs a build, migration, or generator that writes outside its owned paths. Give those workers a git worktree each. Tasks with provably disjoint file sets may share the tree.
 
 ## Common mistakes
 

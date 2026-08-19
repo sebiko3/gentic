@@ -13,7 +13,7 @@ Iterate proves the run against its Definition of Done and, when items fail, choo
 
 ## Verification
 
-1. Run **every** DoD check literally — the exact command or inspection the masterprompt names. No sampling, no "the others will pass too".
+1. Run **every** DoD check literally — the exact command or inspection the masterprompt names. No sampling, no "the others will pass too". Dispatch `dod-auditor` with the masterprompt path to do this adversarially: it runs each named check and returns PROVEN / FAILED / UNVERIFIABLE with the real output, and it treats UNVERIFIABLE as a non-pass rather than rounding it up. Where that agent is unavailable, run the checks yourself under the same rule.
 2. Record each result in the iteration log with a one-line evidence summary (command + outcome). Passing checks log Rung `—`, Points 0.
 3. Editing a DoD item to make it pass is forbidden. DoD changes happen only via rung 5.
 4. All items pass → if superpowers:verification-before-completion is available, invoke it as the final gate (otherwise re-run every DoD check once more, fresh, quoting outputs); then write the final report (below).

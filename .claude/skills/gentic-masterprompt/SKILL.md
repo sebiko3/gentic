@@ -59,7 +59,9 @@ Re-read the finished file as an adversary:
 4. **Missing non-goal scan** — what will a diligent agent over-build? Exclude it.
 5. **Decomposition check** — if the Mission is really several missions, stop and split into separate runs.
 
-Fix findings inline. Spec amendments after a rung 5 or 8 escalation repeat this pass. If subagents are available, optionally dispatch one fresh-eyes critic with only this file and the question "what would you get wrong executing this?"
+Fix findings inline. Spec amendments after a rung 5 or 8 escalation repeat this pass.
+
+Then dispatch `masterprompt-critic` with **only this file** — not the brief, not the decisions, not the conversation. Withholding the context is the point: it reproduces the position of the agent who will execute this after a compaction. Its question is "what would you get wrong executing this?", and a blocking finding from it is cheaper to fix now than at rung 5. Where that agent is unavailable, run the five scans above a second time yourself, reading only this file.
 
 ## Common mistakes
 
