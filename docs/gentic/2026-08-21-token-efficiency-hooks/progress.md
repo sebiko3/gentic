@@ -1,13 +1,13 @@
 # Run: token-efficiency-hooks
 Goal: Build hooks that reduce token waste in Claude Code sessions.
-Iteration budget: 13 remaining (rungs spend it; task sizes never do)
+Iteration budget: 13 of 13 remaining — no escalation rung was spent.
 
 ## Phases
 - [x] 1 Scout
 - [x] 2 Interview
 - [x] 3 Masterprompt
 - [x] 4 Execute
-- [ ] 5 Iterate
+- [x] 5 Iterate
 
 ## Tasks
 | # | Task | Size | Depends on | Test | RED | Status |
@@ -24,6 +24,22 @@ Sizes are planning estimates only; they never spend the iteration budget.
 ## Iteration log
 | # | DoD item | Rung | Points | Result |
 |---|----------|------|--------|--------|
+| 1 | D1 duplicate read denied with full message | — | 0 | PROVEN — `test_duplicate_read_is_denied_once` → OK |
+| 2 | D2 valve: retry, offset/limit, modified file all pass | — | 0 | PROVEN — `test_valve_never_denies_twice_per_path`, `test_read_with_offset_or_limit_always_passes`, `test_modified_file_passes_and_refreshes_the_ledger` → OK |
+| 3 | D3 bare cat > 89 KB denied once; composed forms pass | — | 0 | PROVEN — `test_bare_cat_of_large_file_is_denied_once`, `test_bounded_and_composed_forms_pass` → OK |
+| 4 | D4 spend accumulates across turns | — | 0 | PROVEN — `test_spend_accumulates_across_turns` → OK |
+| 5 | D5 spend report: threshold, once, joined | — | 0 | PROVEN — `test_spend_report_threshold_and_once`, `test_below_threshold_stays_silent` → OK |
+| 6 | D6 repeats counted, never denied; edit resets | — | 0 | PROVEN — `test_repeat_readonly_bash_counted_not_denied`, `test_intervening_edit_resets_repeat_eligibility` → OK |
+| 7 | D7 legacy state upgrades in place | — | 0 | PROVEN — `test_legacy_state_upgrades_in_place` → OK (session facts survive) |
+| 8 | D8 harness green, suite registered, latency held | — | 0 | PROVEN — `run.sh` → exit 0, `test_token_efficiency (Ran 15 tests)`, medians 22.5 / 24.5 ms |
+| 9 | D9 hooks README documents guards/valve/estimates | — | 0 | PROVEN — `test_docs_document_the_guards` → OK |
+| 10 | D10 install path sees both new files | — | 0 | PROVEN — `./install.sh --check` lists `lib/token_efficiency.py` and `tests/test_token_efficiency.py`, exit 1 |
+
+Checks run directly under the dod-auditor rule (no subagent dispatch in this session);
+verification-before-completion applied with fresh outputs. Budget: 13 of 13 remaining — no rung
+spent. Every feature test went RED first (evidence in the task table); the negative-space tests
+(composed cat forms, mutating commands) passed on arrival by design — they pin the guards'
+boundaries, not their existence.
 
 ## Notes / handoff
 
