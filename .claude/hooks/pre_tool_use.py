@@ -21,7 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib import agentignore, common  # noqa: E402
+from lib import agentignore, common, token_efficiency  # noqa: E402
 
 # What each tool needs permission to do.
 READ_TOOLS = {"Read", "NotebookRead"}
@@ -137,6 +137,23 @@ def dangerous_rm(argv):
     return None
 
 
+def duplicate_read_guard(payload, tool_input, cwd):
+    """Deny a repeat Read of an unchanged file — once per path, valve always open.
+
+    State is saved *before* blocking (the verification gate's pattern): the fired-marker must
+    be durable by the time the model retries, so the retry passes unconditionally.
+    """
+    session_id = payload.get("session_id")
+    if not session_id:
+        return None
+    state = common.load_state(session_id)
+    session = state.setdefault("session", {})
+    reason = token_efficiency.check_read(session, tool_input, cwd)
+    common.save_state(session_id, state)
+    if reason:
+        common.block(reason)
+
+
 def deny(reason):
     common.emit({
         "hookSpecificOutput": {
@@ -239,7 +256,11 @@ def main():
             need_write=tool in WRITE_TOOLS or tool in READ_WRITE_TOOLS,
             cwd=cwd,
         )
-        return deny(reason) if reason else None
+        if reason:
+            return deny(reason)
+        if tool == "Read":
+            return duplicate_read_guard(payload, tool_input, cwd)
+        return None
 
     if tool != "Bash":
         return
