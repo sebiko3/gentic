@@ -13,7 +13,7 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 | # | Task | Size | Depends on | Test | RED | Status |
 |---|------|------|------------|------|-----|--------|
 | 1 | Duplicate-read guard with valve; legacy state upgrades in place (D1, D2, D7) | 5 | — | `tests/test_token_efficiency.py::test_duplicate_read_is_denied_once`, `::test_valve_never_denies_twice_per_path`, `::test_legacy_state_upgrades_in_place` | `AssertionError: 0 != 2 : duplicate read was not denied`; `AssertionError: 0 != 2 : no deny on legacy state`; valve test failed at its precondition (same missing-feature RED) | done |
-| 2 | Bare-cat guard, cwd-resolved, shared valve ledger (D3) | 3 | 1 | `tests/test_token_efficiency.py::test_bare_cat_of_large_file_is_denied_once` | | pending |
+| 2 | Bare-cat guard, cwd-resolved, shared valve ledger (D3) | 3 | 1 | `tests/test_token_efficiency.py::test_bare_cat_of_large_file_is_denied_once`, `::test_bounded_and_composed_forms_pass`, `::test_relative_path_resolves_against_cwd` | `AssertionError: 0 != 2 : bare cat passed`; `AssertionError: 0 != 2 : relative bare cat was not resolved against cwd` | done |
 | 3 | Spend accumulation (Read + Bash) and repeat counting (D4, D6) | 3 | 1 | `tests/test_token_efficiency.py::test_spend_accumulates_across_turns`, `::test_repeat_readonly_bash_counted_not_denied` | | pending |
 | 4 | Stop spend report — threshold, once, joined advisory (D5) | 2 | 3 | `tests/test_token_efficiency.py::test_spend_report_threshold_and_once` | | pending |
 | 5 | Hooks README documents guards, valve, estimates (D9) | 1 | 1-4 | `tests/test_token_efficiency.py::test_docs_document_the_guards` | | pending |

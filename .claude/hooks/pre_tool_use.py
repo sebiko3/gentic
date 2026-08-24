@@ -154,6 +154,19 @@ def duplicate_read_guard(payload, tool_input, cwd):
         common.block(reason)
 
 
+def bare_cat_guard(payload, command, cwd):
+    """Deny a bare cat of one large file — once per path, same valve ledger as the read guard."""
+    session_id = payload.get("session_id")
+    if not session_id:
+        return None
+    state = common.load_state(session_id)
+    session = state.setdefault("session", {})
+    reason = token_efficiency.check_cat(session, command, cwd)
+    common.save_state(session_id, state)
+    if reason:
+        common.block(reason)
+
+
 def deny(reason):
     common.emit({
         "hookSpecificOutput": {
@@ -291,6 +304,8 @@ def main():
     reason = check_bash(command, cwd)
     if reason:
         return deny(reason)
+
+    bare_cat_guard(payload, command, cwd)
 
 
 if __name__ == "__main__":

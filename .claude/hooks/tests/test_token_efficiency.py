@@ -55,6 +55,15 @@ class EfficiencyTestCase(unittest.TestCase):
             "cwd": self.work,
         }, self.state)
 
+    def bash_pre(self, command):
+        return run(PRE, {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": command},
+            "session_id": self.session,
+            "cwd": self.work,
+        }, self.state)
+
     def read_state(self):
         path = Path(self.state) / f"{self.session}.json"
         return json.loads(path.read_text()) if path.exists() else {}
@@ -112,6 +121,35 @@ class DuplicateReadGuard(EfficiencyTestCase):
         self.assertNotIn("Traceback", err)
         # The legacy session facts must survive the upgrade.
         self.assertTrue(self.read_state()["session"].get("reviewed"))
+
+
+class BareCatGuard(EfficiencyTestCase):
+    def big(self, name="big.log"):
+        return self.tmpfile("line of log text padded out to something real\n" * 2600, name)  # ~112 KB
+
+    def test_bare_cat_of_large_file_is_denied_once(self):
+        f = self.big()
+        code, _, err = self.bash_pre(f"cat {f}")
+        self.assertEqual(code, 2, "bare cat passed")
+        lowered = err.lower()
+        self.assertTrue("sed -n" in lowered or "range" in lowered,
+                        f"deny must suggest a ranged read: {err}")
+        code, _, err = self.bash_pre(f"cat {f}")
+        self.assertEqual(code, 0, f"valve failed — second cat deny on same path: {err}")
+
+    def test_bounded_and_composed_forms_pass(self):
+        f = self.big()
+        small = self.tmpfile("tiny\n", "small.txt")
+        for command in (f"cat {f} | wc -l", f"cat {f} > /dev/null", f"cat {small}",
+                        f"head {f}", f"tail {f}", f"cat {f} {small}", "cat missing.log"):
+            with self.subTest(command=command):
+                code, _, err = self.bash_pre(command)
+                self.assertEqual(code, 0, f"must pass: {command}: {err}")
+
+    def test_relative_path_resolves_against_cwd(self):
+        self.big("rel.log")
+        code, _, _ = self.bash_pre("cat rel.log")
+        self.assertEqual(code, 2, "relative bare cat was not resolved against cwd")
 
 
 if __name__ == "__main__":

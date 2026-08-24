@@ -10,6 +10,7 @@ only, `os.stat` at most — file contents are never read here (hot path, 150 ms 
 """
 
 import os
+import shlex
 from pathlib import Path
 
 # Fibonacci-derived constants (house rule): thresholds are balancing values, not magic numbers.
@@ -17,6 +18,12 @@ TOKEN_BYTES = 4          # rough bytes-per-token divisor for all estimates
 CAT_LIMIT = 89 * 1024    # bare `cat` of a file above this is denied
 REPORT_AT = 55_000       # estimated tokens before the one per-session spend report
 LINE_BYTES = 55          # assumed bytes per line when a Read carries a `limit`
+
+BARE_CAT = (
+    "`cat {path}` would print ~{kb} KB straight into context. Read the range you need instead "
+    "— `sed -n 'START,ENDp' {path}`, or the Read tool with offset/limit. "
+    "This guard denies each file at most once per session."
+)
 
 DUPLICATE_READ = (
     "You already read `{path}` this session and it has not changed since — its content is in "
@@ -70,3 +77,36 @@ def check_read(session, tool_input, cwd):
         return DUPLICATE_READ.format(path=tool_input.get("file_path"))
     reads[resolved] = identity
     return None
+
+
+def check_cat(session, command, cwd):
+    """Deny reason for a bare `cat` of one large file, or None. Mutates `session`.
+
+    Deliberately narrow: any pipe, redirect, separator, substitution, flag-only form, multi-file
+    form, small file, or unstatable path passes. The only shape denied is the unbounded funnel —
+    one file, printed whole, larger than CAT_LIMIT — and it shares the read guard's
+    once-per-path valve.
+    """
+    if any(ch in command for ch in "|;&<>`$"):
+        return None
+    try:
+        argv = shlex.split(command)
+    except ValueError:
+        return None
+    if not argv or argv[0] != "cat":
+        return None
+    files = [a for a in argv[1:] if not a.startswith("-")]
+    if len(files) != 1:
+        return None
+    resolved = _resolve(files[0], cwd)
+    if not resolved:
+        return None
+    identity = _identity(resolved)
+    if identity is None or identity[1] <= CAT_LIMIT:
+        return None
+
+    fired = session.setdefault("guard_fired", [])
+    if resolved in fired:
+        return None
+    fired.append(resolved)
+    return BARE_CAT.format(path=files[0], kb=identity[1] // 1024)
