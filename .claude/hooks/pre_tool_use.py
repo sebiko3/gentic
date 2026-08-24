@@ -149,6 +149,11 @@ def duplicate_read_guard(payload, tool_input, cwd):
     state = common.load_state(session_id)
     session = state.setdefault("session", {})
     reason = token_efficiency.check_read(session, tool_input, cwd)
+    estimate = token_efficiency.read_estimate(tool_input, cwd)
+    if reason:
+        token_efficiency.note_saved(session, estimate)
+    else:
+        token_efficiency.note_read(session, estimate)
     common.save_state(session_id, state)
     if reason:
         common.block(reason)

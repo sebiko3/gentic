@@ -21,7 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib import common  # noqa: E402
+from lib import common, token_efficiency  # noqa: E402
 
 VERIFICATION = re.compile(
     r"\b("
@@ -89,6 +89,9 @@ def main():
 
     elif tool == "Bash":
         command = str(tool_input.get("command") or "")
+        token_efficiency.record_bash(state.setdefault("session", {}), command,
+                                     payload.get("tool_output"))
+        changed = True
         if VERIFICATION.search(command):
             code = exit_code_of(payload)
             entry = {"command": command[:300], "exit_code": code, "ts": time.time()}
@@ -108,6 +111,7 @@ def main():
                 state["code_changed"] = True
                 if TEST_PATH.search(path):
                     state["test_touched"] = True
+            token_efficiency.note_edit(state.setdefault("session", {}))
             changed = True
 
     if changed:

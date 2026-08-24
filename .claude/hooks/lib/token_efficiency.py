@@ -9,7 +9,9 @@ Pure logic over the state dict; callers own loading, saving, and the deny mechan
 only, `os.stat` at most — file contents are never read here (hot path, 150 ms budget).
 """
 
+import json
 import os
+import re
 import shlex
 from pathlib import Path
 
@@ -110,3 +112,57 @@ def check_cat(session, command, cwd):
         return None
     fired.append(resolved)
     return BARE_CAT.format(path=files[0], kb=identity[1] // 1024)
+
+
+# Commands whose re-run with an unchanged tree returns what the model already has.
+READONLY = re.compile(r"^\s*(grep|rg|find|ls|cat|head|tail|wc|git\s+(log|diff|status))\b")
+
+
+def read_estimate(tool_input, cwd):
+    """Estimated context tokens a Read will cost. 0 when nothing can be statted."""
+    resolved = _resolve(tool_input.get("file_path"), cwd)
+    if not resolved:
+        return 0
+    identity = _identity(resolved)
+    if identity is None:
+        return 0
+    size = identity[1]
+    limit = tool_input.get("limit")
+    if isinstance(limit, int) and limit > 0:
+        size = min(size, limit * LINE_BYTES)
+    return size // TOKEN_BYTES
+
+
+def note_read(session, tokens):
+    session["spend_est"] = session.get("spend_est", 0) + tokens
+    session["reads_n"] = session.get("reads_n", 0) + 1
+
+
+def note_saved(session, tokens):
+    """A deny kept this many estimated tokens out of context."""
+    session["spend_saved"] = session.get("spend_saved", 0) + tokens
+
+
+def note_edit(session):
+    """Any edit-class tool call: re-running a read-only command is legitimate again."""
+    session["edit_seq"] = session.get("edit_seq", 0) + 1
+
+
+def record_bash(session, command, tool_output):
+    """Accumulate a Bash result's estimated cost; count identical read-only re-runs."""
+    try:
+        raw = tool_output if isinstance(tool_output, str) else json.dumps(tool_output, default=str)
+    except (TypeError, ValueError):
+        raw = ""
+    session["spend_est"] = session.get("spend_est", 0) + len(raw) // TOKEN_BYTES
+    session["bash_n"] = session.get("bash_n", 0) + 1
+
+    trimmed = command.strip()
+    if not READONLY.match(trimmed):
+        return
+    seen = session.setdefault("bash_seen", {})
+    seq = session.get("edit_seq", 0)
+    if seen.get(trimmed) == seq:
+        session["bash_repeats"] = session.get("bash_repeats", 0) + 1
+    else:
+        seen[trimmed] = seq

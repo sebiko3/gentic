@@ -64,6 +64,33 @@ class EfficiencyTestCase(unittest.TestCase):
             "cwd": self.work,
         }, self.state)
 
+    def bash_post(self, command, output="", exit_code=0):
+        return run(POST, {
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": command},
+            "tool_output": {"stdout": output, "exit_code": exit_code},
+            "session_id": self.session,
+            "cwd": self.work,
+        }, self.state)
+
+    def edit_post(self, path="src/app.py"):
+        return run(POST, {
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Edit",
+            "tool_input": {"file_path": path},
+            "session_id": self.session,
+        }, self.state)
+
+    def begin_turn(self):
+        """A user prompt boundary, via the hook that owns it."""
+        return run(HOOKS / "user_prompt_submit.py", {
+            "hook_event_name": "UserPromptSubmit",
+            "prompt": "continue",
+            "session_id": self.session,
+            "cwd": self.work,
+        }, self.state)
+
     def read_state(self):
         path = Path(self.state) / f"{self.session}.json"
         return json.loads(path.read_text()) if path.exists() else {}
@@ -150,6 +177,44 @@ class BareCatGuard(EfficiencyTestCase):
         self.big("rel.log")
         code, _, _ = self.bash_pre("cat rel.log")
         self.assertEqual(code, 2, "relative bare cat was not resolved against cwd")
+
+
+class SpendLedger(EfficiencyTestCase):
+    def session_state(self):
+        return self.read_state().get("session", {})
+
+    def test_spend_accumulates_across_turns(self):
+        f = self.tmpfile("x = 1\n" * 200)
+        self.read(f)
+        after_read = self.session_state().get("spend_est", 0)
+        self.assertGreater(after_read, 0, "no spend recorded")
+        self.bash_post("grep -rn foo src", output="hit\n" * 500)
+        after_bash = self.session_state().get("spend_est", 0)
+        self.assertGreater(after_bash, after_read, "Bash result added no spend")
+        self.begin_turn()
+        f2 = self.tmpfile("y = 2\n" * 200, "other.py")
+        self.read(f2)
+        final = self.session_state().get("spend_est", 0)
+        self.assertGreater(final, after_bash, "spend did not survive the turn boundary")
+
+    def test_repeat_readonly_bash_counted_not_denied(self):
+        code, _, _ = self.bash_post("grep -rn foo src", output="hit\n")
+        self.assertEqual(code, 0)
+        code, _, _ = self.bash_post("grep -rn foo src", output="hit\n")
+        self.assertEqual(code, 0, "repeats must never be denied")
+        self.assertEqual(self.session_state().get("bash_repeats", 0), 1, "repeat not counted")
+
+    def test_intervening_edit_resets_repeat_eligibility(self):
+        self.bash_post("grep -rn foo src", output="hit\n")
+        self.edit_post()
+        self.bash_post("grep -rn foo src", output="hit\n")
+        self.assertEqual(self.session_state().get("bash_repeats", 0), 0,
+                         "an edited tree makes a re-run legitimate")
+
+    def test_mutating_commands_are_not_repeat_tracked(self):
+        self.bash_post("python3 setup.py build", output="ok\n")
+        self.bash_post("python3 setup.py build", output="ok\n")
+        self.assertEqual(self.session_state().get("bash_repeats", 0), 0)
 
 
 if __name__ == "__main__":
