@@ -6,7 +6,7 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 - [x] 1 Scout
 - [x] 2 Interview
 - [x] 3 Masterprompt
-- [ ] 4 Execute
+- [x] 4 Execute
 - [ ] 5 Iterate
 
 ## Tasks
@@ -17,7 +17,7 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 | 3 | Spend accumulation (Read + Bash) and repeat counting (D4, D6) | 3 | 1 | `tests/test_token_efficiency.py::test_spend_accumulates_across_turns`, `::test_repeat_readonly_bash_counted_not_denied`, `::test_intervening_edit_resets_repeat_eligibility`, `::test_mutating_commands_are_not_repeat_tracked` | `AssertionError: 0 not greater than 0 : no spend recorded`; `AssertionError: 0 != 1 : repeat not counted` | done |
 | 4 | Stop spend report — threshold, once, joined advisory (D5) | 2 | 3 | `tests/test_token_efficiency.py::test_spend_report_threshold_and_once`, `::test_below_threshold_stays_silent` | `AssertionError: 'tokens' not found in '' : no spend report` | done |
 | 5 | Hooks README documents guards, valve, estimates (D9) | 1 | 1-4 | `tests/test_token_efficiency.py::test_docs_document_the_guards` | `AssertionError: 'duplicate' not found in … : hooks README does not document the read guard` | done |
-| 6 | Harness registration and full green; install --check lists new files (D8, D10) | 2 | 1-5 | `bash .claude/hooks/tests/run.sh`; `./install.sh --check` | | pending |
+| 6 | Harness registration and full green; install --check lists new files (D8, D10) | 2 | 1-5 | `bash .claude/hooks/tests/run.sh`; `./install.sh --check` | registration RED: `run.sh` output contained 0 `test_token_efficiency` lines before the suite-list edit | done |
 
 Sizes are planning estimates only; they never spend the iteration budget.
 
