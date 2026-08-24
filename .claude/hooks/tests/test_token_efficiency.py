@@ -91,6 +91,19 @@ class EfficiencyTestCase(unittest.TestCase):
             "cwd": self.work,
         }, self.state)
 
+    def stop(self, message="Here is the summary."):
+        return run(STOP, {
+            "hook_event_name": "Stop",
+            "last_assistant_message": message,
+            "session_id": self.session,
+        }, self.state)
+
+    def seed_session(self, **session):
+        """Write a state file with the given session facts, bypassing the hooks."""
+        state = {"turn": 1, "evidence": [], "touched": [], "code_changed": False,
+                 "test_touched": False, "red": [], "session": session}
+        (Path(self.state) / f"{self.session}.json").write_text(json.dumps(state))
+
     def read_state(self):
         path = Path(self.state) / f"{self.session}.json"
         return json.loads(path.read_text()) if path.exists() else {}
@@ -215,6 +228,23 @@ class SpendLedger(EfficiencyTestCase):
         self.bash_post("python3 setup.py build", output="ok\n")
         self.bash_post("python3 setup.py build", output="ok\n")
         self.assertEqual(self.session_state().get("bash_repeats", 0), 0)
+
+
+class SpendReport(EfficiencyTestCase):
+    def test_spend_report_threshold_and_once(self):
+        self.seed_session(spend_est=60_000, spend_saved=4_000, reads_n=21, bash_n=34,
+                          bash_repeats=3)
+        code, out, _ = self.stop()
+        self.assertEqual(code, 0, "the report path must never block")
+        self.assertIn("tokens", out.lower(), "no spend report")
+        self.assertIn("estimated", out.lower(), "the report must declare itself an estimate")
+        code, out, _ = self.stop()
+        self.assertNotIn("tokens", out.lower(), "spend reported twice in one session")
+
+    def test_below_threshold_stays_silent(self):
+        self.seed_session(spend_est=20_000, reads_n=8, bash_n=13)
+        _, out, _ = self.stop()
+        self.assertNotIn("estimated", out.lower(), "report fired below the 55k threshold")
 
 
 if __name__ == "__main__":

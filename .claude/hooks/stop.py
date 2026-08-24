@@ -28,7 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib import common  # noqa: E402
+from lib import common, token_efficiency  # noqa: E402
 
 DONE_CLAIM = re.compile(
     r"\b("
@@ -56,6 +56,11 @@ NOT_A_CLAIM = re.compile(
 
 NUDGE = ("{n} changed file(s) not reviewed yet this session — {files}. "
          "Consider /review, or /ship to review, commit and open a PR.")
+
+SPEND_REPORT = ("This session's tool traffic ≈ {spent}k estimated tokens "
+                "({reads} file reads, {bash} commands, {repeats} identical re-runs); "
+                "the guards kept ≈ {saved}k out of context. Estimates are bytes/4 heuristics, "
+                "not measurements.")
 
 TDD_NUDGE = ("{n} production file(s) changed — {files} — with no test touched and no failing "
              "test observed first. Test-first means the failing test comes before the code; "
@@ -93,6 +98,14 @@ def review_applies(state):
     return not (session.get("reviewed") or session.get("review_nudge_shown"))
 
 
+def spend_report_applies(state):
+    """Estimated spend crossed the threshold and has not been reported this session."""
+    session = state.get("session", {})
+    if session.get("spend_reported"):
+        return False
+    return session.get("spend_est", 0) >= token_efficiency.REPORT_AT
+
+
 def advisory_nudges(payload, state):
     """Emit the applicable suggestions as one message. This path never blocks.
 
@@ -111,6 +124,15 @@ def advisory_nudges(payload, state):
     if review_applies(state):
         session["review_nudge_shown"] = True
         parts.append(NUDGE.format(n=len(touched), files=named(touched)))
+    if spend_report_applies(state):
+        session["spend_reported"] = True
+        parts.append(SPEND_REPORT.format(
+            spent=session.get("spend_est", 0) // 1000,
+            reads=session.get("reads_n", 0),
+            bash=session.get("bash_n", 0),
+            repeats=session.get("bash_repeats", 0),
+            saved=session.get("spend_saved", 0) // 1000,
+        ))
 
     if not parts:
         return
