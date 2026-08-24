@@ -27,6 +27,28 @@ Built by the gentic run `2026-08-17-universal-claude-setup`
 
 Session state lives in `~/.claude/state/<session_id>.json` and is pruned after 7 days.
 
+## Token-efficiency guards
+
+Two PreToolUse guards protect the model's context budget; both share one **valve**: a deny fires
+**at most once per file, per session**, and any retry passes unconditionally, so a false positive
+(most likely a stale ledger after context compaction) costs exactly one round-trip and can never
+loop.
+
+- **Duplicate-read guard.** A parameterless `Read` of a file already read this session and
+  unchanged since (same mtime and size) is denied with a pointer back to the content already in
+  context. A `Read` carrying `offset` or `limit` always passes — that is the documented escape
+  hatch, and partial reads never enter the duplicate ledger in either direction.
+- **Bare-cat guard.** A Bash command that is exactly `cat` of one file larger than **89 KB** — no
+  pipes, no redirects, no separators, a single file argument — is denied with a ranged-read
+  suggestion (`sed -n 'A,Bp'`, or Read with offset/limit). Anything composed passes.
+
+The hooks also keep an **estimated-spend ledger**: Read costs are estimated from file size at
+PreToolUse (PostToolUse never sees Read), Bash result sizes at PostToolUse, identical re-runs of
+read-only commands with no intervening edit are counted, and one advisory line is reported at
+Stop when the session crosses ~55k estimated tokens — once per session, joined into the combined
+nudge message. All figures are **bytes/4 estimates**, a heuristic, not a measurement; no
+tokenizer runs and nothing is reported to the model.
+
 ## The Stop gate cannot trap you
 
 The gate fires **at most once per user prompt**. It sets `stop_block_fired` before exiting 2, so the

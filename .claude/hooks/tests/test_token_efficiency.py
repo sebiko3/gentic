@@ -247,5 +247,16 @@ class SpendReport(EfficiencyTestCase):
         self.assertNotIn("estimated", out.lower(), "report fired below the 55k threshold")
 
 
+class Documentation(unittest.TestCase):
+    def test_docs_document_the_guards(self):
+        body = (HOOKS / "README.md").read_text(encoding="utf-8")
+        lowered = body.lower()
+        self.assertIn("duplicate", lowered, "hooks README does not document the read guard")
+        self.assertIn("89", body, "hooks README does not name the cat-guard threshold")
+        self.assertIn("valve", lowered, "hooks README does not document the guards")
+        self.assertIn("estimate", lowered, "hooks README does not declare estimates heuristic")
+        self.assertIn("once per", lowered, "hooks README does not state the once-per bound")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)
