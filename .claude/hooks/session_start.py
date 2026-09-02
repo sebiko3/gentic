@@ -61,7 +61,7 @@ def main():
         lessons, preferences = known
         lines.append(
             f"brain: {lessons} lesson(s) for {Path(root).name}, {preferences} learned preference(s) — "
-            'python3 "$HOME/.claude/hooks/lib/brain.py" recall <words>'
+            'python3 ~/.claude/hooks/lib/brain.py recall <words>'
         )
 
     if lines:

@@ -1,6 +1,6 @@
 # Run: sqlite-brain
 Goal: Give gentic a persistent SQLite brain — structured memory (lessons, decisions, runs, events, stamps) plus free-form notes with full-text recall and unrestricted SQL — written to by the hooks and read by the phase skills.
-Iteration budget: 13 remaining (rungs spend it; task sizes never do)
+Iteration budget: 11 remaining (2 spent: two rung-1 fixes after the audit) (rungs spend it; task sizes never do)
 
 ## Phases
 - [x] 1 Scout
@@ -24,6 +24,11 @@ Sizes are planning estimates only; they never spend the iteration budget. Order:
 ## Iteration log
 | # | DoD item | Rung | Points | Result |
 |---|----------|------|--------|--------|
+| 1 | D1–D8, D10, D11, D13 | — | 0 | PROVEN by `dod-auditor` (fresh `GENTIC_BRAIN` per check): `-k recall` 2 OK · `-k sql` 2 OK · `-k preference` 1 OK · `-k lesson` 2 OK · `-k run_lifecycle` 1 OK · `-k hooks_write` 1 OK + `test_gate` 19 OK · `-k invisible` 1 OK · `-k session_start` 1 OK · `test_structure` 29 OK · `-k docs` 1 OK · `git ls-files -- .claude \| grep -c brain` → 3, `test_install` 16 OK |
+| 2 | D12 harness exits 0 | 1 | 1 | FAILED then fixed. Root cause: `session_start.py:64` emitted `python3 "$HOME/.claude/hooks/lib/brain.py" …` — the literal D8 names — and the harness isolation grep (`run.sh` "hooks never write into a project's .claude directory") rejects any hook line with a double-quoted `.claude` path lacking `Path.home()`. The masterprompt's own Context predicted this collision and D8 ignored it. Fix: the notice now prints `python3 ~/.claude/hooks/lib/brain.py recall <words>` (single-quoted literal; the README's own form). D8's contract test still passes; D8's quoted wording is deviated from and recorded here, not edited. First retry still failed (double-quoted Python literal); second retry green. |
+| 3 | D9 `-k scoping` runs no tests | 1 | 1 | FAILED then fixed. Root cause: the verify pattern `scoping` and the contract's test name `test_lessons_default_to_current_project` disagreed — a spec typo the critique pass missed. The test is renamed `test_scoping_lessons_default_to_current_project`, so the verify command runs it and the contract name survives as a substring. DoD text untouched. `-k scoping` → `Ran 1 test OK`. |
 
 ## Notes / handoff
 - Child run R1 of the epic `2026-09-02-self-improving-gentic`; its brief and decisions apply.
+- Stale line references in `masterprompt.md` Context (isolation grep cited at run.sh 87-96, skill
+  count at 147; live file: 110-119 and 152). Noted, not a DoD item; the same drift produced D9.
