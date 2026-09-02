@@ -81,7 +81,7 @@ The costs grow super-linearly because each rung discards more prior work — and
 
 ## The agents
 
-Four subagents, each closing a gap the workflow had left to improvisation. All four are plain
+Five subagents, each closing a gap the workflow had left to improvisation. All five are plain
 markdown in [.claude/agents/](.claude/agents). None of the reviewing three is given an edit
 tool. `masterprompt-critic` is fully read-only (`Read, Grep, Glob`); `code-reviewer` and
 `dod-auditor` also get `Bash`, which they need to run `git diff` and to execute the checks a
@@ -95,6 +95,10 @@ pins each agent's declared tools so this claim and the frontmatter cannot drift 
 | [`dod-auditor`](.claude/agents/dod-auditor.md) | the Iterate phase, before any completion claim | Runs each Definition-of-Done check literally and returns PROVEN / FAILED / **UNVERIFIABLE**. It may never edit a DoD item to make it pass, and never rounds unverifiable up to proven. |
 | [`masterprompt-critic`](.claude/agents/masterprompt-critic.md) | the Masterprompt critique pass | Gets the spec and nothing else — no brief, no decisions, no conversation. That withheld context is the instrument: it occupies the position of the agent who executes this after a compaction. |
 | [`task-executor`](.claude/agents/task-executor.md) | Execute fan-out, on independent 3+ point tasks | Does one task test-first and returns a fixed evidence block. Refuses a vague assignment instead of guessing — it has no channel back to the user, so improvising is how a fan-out produces four readings of one spec. |
+| [`ui-tester`](.claude/agents/ui-tester.md) | a `ui` Definition-of-Done item, a UI failure to reproduce, or a product to inspect before changing it | Drives the real browser (Claude in Chrome first, the in-app Browser as fallback), files a half-scale screenshot under the run's `evidence/` directory, and reports what the screen showed — literally. It is given the page and the flow, never the spec. |
+
+`ui-tester` is the one agent whose tools are not pinned: it must inherit the browser tools, so
+its own text is what forbids it to edit.
 
 Review is no longer something you have to remember. When a session has changed code and no
 review has run, the Stop hook prints a one-line suggestion — advisory, never blocking, once per
@@ -191,6 +195,30 @@ run three times (`runs: 3` in their frontmatter) because a single reply is noise
 graders assert the shape each agent definition promises — the auditor's `UNVERIFIABLE` verdict
 and closing count, the critic's five named scans, the executor's `status:` line, the reviewer's
 `confidence <n>` and `Not reported` — rather than vocabulary a built-in agent also produces.
+
+## UI contracts
+
+A behaviour a person sees or clicks is a Definition-of-Done item like any other, with a
+contract that names its test:
+
+```markdown
+- [ ] Dragging an event to another day moves it
+      verify: `npx playwright test tests/e2e/calendar.spec.ts`
+      contract: ui · tests/e2e/calendar.spec.ts · test_drag_event_to_new_day ·
+                the event renders under the target day · expected RED: `locator not found`
+```
+
+The executable half is always the project's own e2e runner — Playwright, Cypress, whatever it
+already runs; the hooks count those runs as verification evidence. The browser is for evidence
+and exploration, not for the test: the `ui-tester` agent opens the flow in Claude in Chrome
+(fallback: the in-app Browser), files a half-scale screenshot under
+`docs/gentic/<run>/evidence/`, and reports what it saw. A project with no e2e runner gets a
+`ui-tester` verification instead, and the item is flagged `not reproducible in CI` so nobody
+mistakes the screenshot for a test. When the request touches a user-facing surface, Scout
+starts the app first, walks its routes, and puts a feature inventory with screenshots into the
+brief — questions asked from a screenshot are sharper than questions asked from `ls`. Never
+screenshot a production or authenticated surface or real personal data; fixture and seed data
+only.
 
 ## Standing authorizations
 
