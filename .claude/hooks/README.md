@@ -126,3 +126,25 @@ cp ~/.claude/settings.json.bak-2026-08-17 ~/.claude/settings.json
 
 That removes the `hooks` key entirely; the scripts become inert. To also remove them:
 `rm -rf ~/.claude/hooks ~/.claude/state`.
+
+## The brain
+
+`post_tool_use.py` and `stop.py` also append events to gentic's brain, `~/.claude/gentic/brain.sqlite`
+(`GENTIC_BRAIN` overrides the path; the harness always sets it to a throwaway file). The kinds
+they write, and nothing else:
+
+| kind | written by | detail |
+|------|-----------|--------|
+| `red` | `post_tool_use` | a recognised verification command that exited non-zero |
+| `verification` | `post_tool_use` | one that exited 0 (or with no exit code available) |
+| `gate_block` | `stop` | the verification gate's block reason |
+| `nudge_tdd`, `nudge_review`, `nudge_spend` | `stop` | the advisory text shown to the user |
+
+`detail` is the first 300 characters of the command or message, with credential values
+(`Authorization:`, `--password`, `token=`, `password=`, `secret=`, `AWS_…=`) replaced by `***`.
+Every write is best-effort and **silent on failure**: `lib/brain.py` opens the file with a 34 ms
+lock timeout, and a brain that is missing, locked, or under a path that cannot be created costs
+the hook nothing — no message, no stderr, no exit code change. `session_start.py` reads the
+brain (never creates it) to mention how many lessons and learned preferences exist for the
+project. Everything else in the brain — notes, decisions, lessons, runs, stamps, free SQL — is
+written by the phase skills through the same CLI; see `skills/gentic-brain/SKILL.md`.

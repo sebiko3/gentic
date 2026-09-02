@@ -100,6 +100,47 @@ Review is no longer something you have to remember. When a session has changed c
 review has run, the Stop hook prints a one-line suggestion — advisory, never blocking, once per
 session. The verification gate stays the setup's only hard block.
 
+## The brain
+
+gentic remembers. One SQLite file, `~/.claude/gentic/brain.sqlite` (set `GENTIC_BRAIN` to put it
+elsewhere), holds what earlier runs learned, what the user has decided, and what the hooks saw —
+across every project on the machine, keyed by repository name. It is the agent's own memory, and
+it may use it as it likes:
+
+```bash
+python3 ~/.claude/hooks/lib/brain.py note calendar-dnd "drag and drop needs pointer events on touch"
+python3 ~/.claude/hooks/lib/brain.py recall pointer events
+python3 ~/.claude/hooks/lib/brain.py preference artifact-location     # exit 1 until learned
+python3 ~/.claude/hooks/lib/brain.py lessons
+python3 ~/.claude/hooks/lib/brain.py sql "select kind, count(*) from events group by kind"
+```
+
+| What it holds | Who writes it | Who reads it |
+|---------------|---------------|--------------|
+| `events` — every `red` and `verification` run, every gate block and nudge | the hooks, automatically, best-effort | you, via `sql`; later runs' tooling |
+| `decisions` and learned preferences | the Interview (`--source user`), the Masterprompt (`--source default`) | the Interview, before it asks |
+| `lessons` — what each spent rung taught, and *who caught it* | the Iterate phase | the Scout phase, before it explores |
+| `notes` with full-text recall | the agent, whenever something is worth keeping | the Scout phase; anyone |
+| `runs` and `stamps` — lifecycle and the sha256 of every skill a run used | the `gentic` skill | future evals, to tie a lesson to a skill version |
+
+The rules are the ones the rest of the setup already lives by. **A brain that is missing, locked
+or unwritable is invisible**: the hooks give up within a 34 ms lock timeout and print nothing,
+and the harness measures the writing hook against the same 150 ms budget as the others.
+**The user's memory is never a test fixture**: `run.sh` and every test point `GENTIC_BRAIN` at a
+throwaway file. **A preference is learned, not assumed**: the Interview adopts an answer only
+after the user has given it twice, the most recent user answer wins, and defaults never teach.
+
+`sql` is deliberately unrestricted — the agent may create its own tables. Before any `DROP`,
+`DELETE`, `UPDATE` or `ALTER` the file is copied to `brain.sqlite.bak`, one level of undo.
+Commands recorded as events have credentials scrubbed (`Authorization:`, `--password`,
+`token=`, `AWS_…=`); notes are not scrubbed, so never note a secret. There are no schema
+migrations: if a later version changes a table, delete the file or point `GENTIC_BRAIN` at a
+new one. SQLite's write-ahead log assumes a local disk — a home directory synced by iCloud or
+Dropbox is a known hazard; keep the brain out of synced folders.
+
+The [`gentic-brain`](.claude/skills/gentic-brain/SKILL.md) skill carries the full command set
+and says where each phase uses it.
+
 ## Install
 
 ```bash

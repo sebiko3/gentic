@@ -6,7 +6,7 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 - [x] 1 Scout
 - [x] 2 Interview (user delegated all decisions; recorded as `user — delegated`)
 - [x] 3 Masterprompt (critic: 6 blocking / 15 serious / 8 minor, all fixed inline; second cold read clean)
-- [ ] 4 Execute
+- [x] 4 Execute (6 tasks, 6 checkpoint commits, every RED cell filled)
 - [ ] 5 Iterate
 
 ## Tasks
@@ -17,7 +17,7 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 | 3 | decide/preference, lesson/lessons/stats, run/stamp, scoping (D3, D4, D5, D9) | 5 | 1 | `::test_preference_needs_two_agreeing_user_decisions`, `::test_lessons_recorded_and_summarised`, `::test_run_lifecycle_and_stamps`, `::test_lessons_default_to_current_project` | `AssertionError: 2 != 0 : brain CLI did not run: usage: brain.py [-h] [--project PROJECT] {note,recall,sql} …` (all four) | done |
 | 4 | session_start brain line (D8) | 2 | 3 | `::test_session_start_mentions_brain_when_it_has_something` | `AssertionError: 'brain:' not found in ''` | done |
 | 5 | `gentic-brain` skill, wiring into six skills, structure test, run.sh count + registration + isolation (D10, D12) | 3 | 1 | `tests/test_structure.py::test_brain_skill_is_wired_into_the_phases`, `tests/test_brain.py::test_harness_registers_and_isolates_the_brain_suite` | `AssertionError: False is not true : skills/gentic-brain/SKILL.md missing`; `AssertionError: 'test_brain' not found in 'for suite in test_lib … test_project_conventions; do'` | done |
-| 6 | README + hooks README + installer test (D11, D13) | 2 | 1-5 | `::test_docs_document_the_brain`, `tests/test_install.py::test_source_list_includes_the_brain` | | pending |
+| 6 | README + hooks README + installer test (D11, D13) | 2 | 1-5 | `::test_docs_document_the_brain`, `tests/test_install.py::test_source_list_includes_the_brain` | `AssertionError: '## The brain' not found in '# gentic…'`; `AssertionError: 'skills/gentic-brain/SKILL.md' not found in 'out of sync with …'` (observed before task 5's commit) | done |
 
 Sizes are planning estimates only; they never spend the iteration budget. Order: 1, 2 (riskiest: hot-path latency), 3, 4, 5, 6.
 
