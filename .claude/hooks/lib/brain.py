@@ -225,27 +225,205 @@ def cmd_sql(args, conn, project):
     return 0
 
 
+def cmd_decide(args, conn, project):
+    conn.execute(
+        "INSERT INTO decisions (ts, project, run, topic, chosen, source) VALUES (?,?,?,?,?,?)",
+        (time.time(), project, args.run, args.topic, " ".join(args.chosen), args.source),
+    )
+    conn.commit()
+    return 0
+
+
+def learned_preference(conn, topic):
+    """The user's settled answer for `topic`, or None.
+
+    Preferences describe the user, not a repository, so they are learned across projects. The
+    most recent user-sourced decision wins, and only once that value has been chosen at least
+    PREFERENCE_MIN times: one answer is an accident, two is a preference, and a changed mind
+    resets the count. Defaults and learned rows never teach — the agent must not confirm its
+    own guesses.
+    """
+    rows = conn.execute(
+        "SELECT chosen FROM decisions WHERE topic = ? AND source = 'user' ORDER BY id DESC",
+        (topic,),
+    ).fetchall()
+    if not rows:
+        return None
+    latest = rows[0][0]
+    if sum(1 for (chosen,) in rows if chosen == latest) >= PREFERENCE_MIN:
+        return latest
+    return None
+
+
+def cmd_preference(args, conn, project):
+    value = learned_preference(conn, args.topic)
+    if value is None:
+        return 1
+    print(value)
+    return 0
+
+
+def cmd_lesson(args, conn, project):
+    conn.execute(
+        "INSERT INTO lessons (ts, project, run, item, rung, points, caught_by, cause, note)"
+        " VALUES (?,?,?,?,?,?,?,?,?)",
+        (time.time(), project, args.run, args.item, args.rung, args.points, args.caught_by,
+         args.cause, args.note),
+    )
+    conn.commit()
+    return 0
+
+
+def scope_clause(args, project):
+    if getattr(args, "all", False):
+        return "", ()
+    return " WHERE project = ?", (project,)
+
+
+def cmd_lessons(args, conn, project):
+    clause, params = scope_clause(args, project)
+    rows = conn.execute(
+        "SELECT id, ts, project, run, item, rung, points, caught_by, cause, note FROM lessons"
+        + clause + " ORDER BY id DESC LIMIT ?", (*params, args.limit),
+    ).fetchall()
+    for row_id, ts, proj, run, item, rung, points, caught_by, cause, note in rows:
+        where = f"{proj}/{run}" if run else proj
+        line = f"#{row_id} {when(ts)} [{where}] {item} — rung {rung}, {points} pt, caught by {caught_by}: {cause}"
+        if note:
+            line += f" ({note})"
+        print(line)
+    return 0
+
+
+def cmd_stats(args, conn, project):
+    clause, params = scope_clause(args, project)
+    print(f"project: {'all' if args.all else project}")
+    total = conn.execute("SELECT COUNT(*), COALESCE(SUM(points), 0) FROM lessons" + clause, params).fetchone()
+    print(f"lessons: {total[0]}")
+    for caught_by, count in conn.execute(
+        "SELECT caught_by, COUNT(*) FROM lessons" + clause + " GROUP BY caught_by ORDER BY 2 DESC, 1",
+        params,
+    ):
+        print(f"  {caught_by}: {count}")
+    print(f"points: {total[1]}")
+    print(f"notes: {conn.execute('SELECT COUNT(*) FROM notes' + clause, params).fetchone()[0]}")
+    topics = [t for (t,) in conn.execute("SELECT DISTINCT topic FROM decisions")]
+    print(f"preferences: {sum(1 for t in topics if learned_preference(conn, t) is not None)}")
+    print(f"events: {conn.execute('SELECT COUNT(*) FROM events' + clause, params).fetchone()[0]}")
+    return 0
+
+
+def cmd_run(args, conn, project):
+    now = time.time()
+    if args.action == "start":
+        conn.execute(
+            "INSERT INTO runs (project, slug, goal, started) VALUES (?,?,?,?)"
+            " ON CONFLICT(project, slug) DO UPDATE SET goal = excluded.goal, started = excluded.started",
+            (project, args.slug, args.goal, now),
+        )
+    else:
+        updated = conn.execute(
+            "UPDATE runs SET finished = ?, outcome = ? WHERE project = ? AND slug = ?",
+            (now, args.outcome, project, args.slug),
+        ).rowcount
+        if not updated:
+            conn.execute(
+                "INSERT INTO runs (project, slug, goal, started, finished, outcome) VALUES (?,?,?,?,?,?)",
+                (project, args.slug, None, None, now, args.outcome),
+            )
+    conn.commit()
+    return 0
+
+
+def cmd_stamp(args, conn, project):
+    now = time.time()
+    for raw in args.paths:
+        path = Path(raw)
+        try:
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        except OSError as exc:
+            print(f"brain: cannot stamp {raw}: {exc}", file=sys.stderr)
+            continue
+        conn.execute(
+            "INSERT INTO stamps (project, slug, path, sha, ts) VALUES (?,?,?,?,?)"
+            " ON CONFLICT(project, slug, path) DO UPDATE SET sha = excluded.sha, ts = excluded.ts",
+            (project, args.slug, str(path.resolve()), digest, now),
+        )
+    conn.commit()
+    return 0
+
+
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--project", default=None, help="override the project key")
+    # Accepted after the subcommand too (`brain lesson ... --project x`); SUPPRESS keeps the
+    # subparser from overwriting a value given before it.
+    scoped = argparse.ArgumentParser(add_help=False)
+    scoped.add_argument("--project", default=argparse.SUPPRESS, help="override the project key")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p = sub.add_parser("note", help="store a free-form note")
+    p = sub.add_parser("note", parents=[scoped], help="store a free-form note")
     p.add_argument("key")
     p.add_argument("body", nargs="+")
     p.add_argument("--tags", default=None)
     p.add_argument("--run", default=None)
     p.set_defaults(fn=cmd_note)
 
-    p = sub.add_parser("recall", help="full-text search over notes")
+    p = sub.add_parser("recall", parents=[scoped], help="full-text search over notes")
     p.add_argument("words", nargs="+")
     p.add_argument("--limit", type=int, default=RECALL_LIMIT)
     p.add_argument("--all", action="store_true", help="search every project")
     p.set_defaults(fn=cmd_recall)
 
-    p = sub.add_parser("sql", help="run one SQL statement; SELECT rows print as JSON lines")
+    p = sub.add_parser("sql", parents=[scoped], help="run one SQL statement; SELECT rows print as JSON lines")
     p.add_argument("statement")
     p.set_defaults(fn=cmd_sql)
+
+    p = sub.add_parser("decide", parents=[scoped], help="record a decision and where it came from")
+    p.add_argument("topic")
+    p.add_argument("chosen", nargs="+")
+    p.add_argument("--source", choices=("user", "default", "learned"), required=True)
+    p.add_argument("--run", default=None)
+    p.set_defaults(fn=cmd_decide)
+
+    p = sub.add_parser("preference", parents=[scoped], help="print the user's learned answer for a topic (exit 1 if none)")
+    p.add_argument("topic")
+    p.set_defaults(fn=cmd_preference)
+
+    p = sub.add_parser("lesson", parents=[scoped], help="record what a failed Definition-of-Done item taught")
+    p.add_argument("--item", required=True)
+    p.add_argument("--rung", type=int, required=True)
+    p.add_argument("--points", type=int, required=True)
+    p.add_argument("--caught-by", required=True, dest="caught_by",
+                   help="suite | live | review | critic | auditor | user")
+    p.add_argument("--cause", required=True)
+    p.add_argument("--note", default=None)
+    p.add_argument("--run", default=None)
+    p.set_defaults(fn=cmd_lesson)
+
+    p = sub.add_parser("lessons", parents=[scoped], help="list lessons, newest first")
+    p.add_argument("--all", action="store_true", help="every project")
+    p.add_argument("--limit", type=int, default=21)
+    p.set_defaults(fn=cmd_lessons)
+
+    p = sub.add_parser("stats", parents=[scoped], help="counts for the current project")
+    p.add_argument("--all", action="store_true", help="every project")
+    p.set_defaults(fn=cmd_stats)
+
+    p = sub.add_parser("run", parents=[scoped], help="record a run's lifecycle")
+    action = p.add_subparsers(dest="action", required=True)
+    start = action.add_parser("start")
+    start.add_argument("slug")
+    start.add_argument("--goal", required=True)
+    finish = action.add_parser("finish")
+    finish.add_argument("slug")
+    finish.add_argument("--outcome", choices=("done", "stopped"), required=True)
+    p.set_defaults(fn=cmd_run)
+
+    p = sub.add_parser("stamp", parents=[scoped], help="record sha256 of the skill/agent files a run used")
+    p.add_argument("slug")
+    p.add_argument("paths", nargs="+")
+    p.set_defaults(fn=cmd_stamp)
 
     return parser
 
