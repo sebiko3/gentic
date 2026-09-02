@@ -13,8 +13,8 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 | # | Task | Size | Depends on | Test | RED | Status |
 |---|------|------|------------|------|-----|--------|
 | 1 | Structure tests (`UiContracts`, `EXPECTED_AGENTS`), then `ui-tester.md` (U4) | 3 | — | `tests/test_structure.py::test_ui_agent_is_defined`, `::test_exactly_the_expected_agents_exist`, `::test_each_agent_states_what_it_returns` | `AssertionError: Items in the second set but not the first: 'ui-tester'`; `AssertionError: False is not true : ui-tester.md missing` | done |
-| 2 | Skill wording: masterprompt grammar, tdd, scout variant, iterate (U1, U2, U3) | 3 | — | `::test_ui_grammar_in_masterprompt`, `::test_ui_tdd_names_ui_tasks`, `::test_ui_scout_walks_the_product`, `::test_ui_iterate_dispatches_the_tester` | | pending |
-| 3 | README; harness (U5, U6) | 2 | 1-2 | `::test_ui_readme_documents_contracts`; `run.sh` | | pending |
+| 2 | Skill wording: masterprompt grammar, tdd, scout variant, iterate (U1, U2, U3) | 3 | — | `::test_ui_grammar_in_masterprompt`, `::test_ui_tdd_names_ui_tasks`, `::test_ui_scout_walks_the_product`, `::test_ui_iterate_dispatches_the_tester` | `AssertionError: 'contract: ui ·' not found in …`; `'## ui tasks' not found in …`; `'runnable product variant' not found in …`; `'ui-tester' not found in …` | done |
+| 3 | README; harness (U5, U6) | 2 | 1-2 | `::test_ui_readme_documents_contracts`; `run.sh` | `AssertionError: '## ui contracts' not found in '# gentic…'`; U6: n/a — runner of the others | done |
 | 4 | Install; live dispatch against the fixture; regression (U7, U8) | 3 | 3 | n/a — live observations | | pending |
 
 Sizes are planning estimates only; they never spend the iteration budget. Order 1–4.

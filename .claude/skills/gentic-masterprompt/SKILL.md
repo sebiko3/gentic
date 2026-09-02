@@ -35,6 +35,9 @@ The masterprompt compiles everything the run knows into a single spec. Write `ma
 - [ ] <observable claim>
       verify: `<exact command>` or <exact inspection step>
       contract: <test file> · <test name> · <behaviour asserted> · expected RED: <the failure to expect>
+- [ ] <observable claim about a screen or a flow>
+      verify: `<the project's e2e command>`
+      contract: ui · <e2e spec file> · <test name> · <flow asserted> · expected RED: <locator or assertion failure>
 - [ ] ...
 
 ## Risks & early signals
@@ -48,6 +51,11 @@ The masterprompt compiles everything the run knows into a single spec. Write `ma
 
 - Each item = an observable claim **plus** the exact check that proves it. "Works correctly" is not a claim; "`pytest tests/test_export.py` passes" is.
 - **Each item also names its test contract: the test file, the test name, the behaviour asserted, and the expected RED.** This is what makes the spec *drive* the tests rather than merely check them — Execute writes the test the spec named, not the test that is convenient once the code exists. Naming the expected failure is the load-bearing part: it is how the executing agent knows a RED was the *right* RED and not a typo.
+- **A UI behaviour gets a `ui` contract.** Its executable half is the project's e2e runner
+  (Playwright, Cypress, or whatever the project already runs — the hooks recognise them); the
+  browser is for evidence, not for the test. A project with no e2e runner gets a `ui-tester`
+  verification with a screenshot instead, and the item is flagged `not reproducible in CI` so
+  nobody mistakes the screenshot for a test.
 - Write contracts, not code. The test's identity belongs in the spec; the test's body is written test-first during Execute.
 - A DoD item whose contract restates its verify command has no contract — name the *test*, not the runner.
 - For an item with nothing executable behind it (documentation, prompts, specs), the contract is a contract test in the project's existing suite: an assertion about the file that fails before the change. `n/a` is reserved for items that change nothing observable, and must carry its reason.
