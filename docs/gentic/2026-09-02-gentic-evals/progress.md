@@ -16,7 +16,7 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 | 2 | Invocation and per-run workspaces, `GENTIC_BRAIN` redirection (E2) | 2 | 1 | `::test_invocation_flags_per_arm` | `AssertionError: [] is not true : claude was never invoked` | done |
 | 3 | Graders, created-file snapshot, scaffold, timeout (E3, E4) | 5 | 2 | `::test_graders_score_a_replayed_transcript`, `::test_scaffold_runs_first_and_is_not_created` | `AssertionError: 0 != 6 : graders were not evaluated`; `AssertionError: 'fixture.txt' not found in [] : scaffold did not run before claude` | done |
 | 4 | Brain `eval_runs`/`eval_graders`, record functions, `brain evals`, runner integration, `--no-brain` (E5) | 3 | 2 | `::test_brain_rows_and_evals_summary` | `AssertionError: 0 != 2 : no eval_runs rows in brain` | done |
-| 5 | Money ceiling, order, exit codes, `result.json` totals (E6) | 2 | 3 | `::test_money_ceiling_and_exit_codes` | | pending |
+| 5 | Money ceiling, order, exit codes, `result.json` totals (E6) | 2 | 3 | `::test_money_ceiling_and_exit_codes` | `AssertionError: 0 != 2 : suite ceiling did not stop the third run` | done |
 | 6 | The five cases, fixtures, scaffolds, manifest, gitignore (E7, E12) | 5 | 3 | `::test_five_cases_are_well_formed`, `::test_manifest_and_gitignore` | | pending |
 | 7 | Verification regex gains the UI runners (E8) | 1 | — | `tests/test_tdd.py::test_ui_test_runners_are_verification_commands` | `AssertionError: [] == [] : npx run was not recorded as evidence` (×4 runners) and `… a failing playwright run was not recorded as RED` | done |
 | 8 | Harness registration and docs (E10, E11) | 2 | 1-7 | `::test_harness_registers_evals_offline`, `::test_docs_evals_are_documented` | | pending |

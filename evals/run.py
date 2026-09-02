@@ -369,6 +369,13 @@ def evaluate(grader, entry):
     return {"name": grader.name, "type": kind, "passed": bool(passed), "detail": detail}
 
 
+def skipped_run(case, model):
+    return {"model": model, "cost_usd": 0.0, "turns": 0, "is_error": False, "skipped": True,
+            "graders": [{"name": g.name, "type": g.type, "passed": False, "detail": "skipped: suite budget"}
+                        for g in case.graders],
+            "_last": "", "_tools": [], "_created": set(), "_error": "skipped: suite budget"}
+
+
 def grade(case, entry):
     if entry["_error"]:
         return [{"name": g.name, "type": g.type, "passed": False, "detail": entry["_error"]} for g in case.graders]
@@ -448,6 +455,7 @@ def run_suite(cases, args):
               "model": args.model or DEFAULT_MODEL, "install_in_sync": not args.skip_install_check,
               "warnings": [], "cases": [], "totals": {}}
     total_cost = 0.0
+    skipped = 0
     for case in cases:
         report["warnings"] += case.warnings
         if not case.graders:
@@ -457,8 +465,15 @@ def run_suite(cases, args):
         for arm in arms_for(args.arm):
             entry["arms"][arm] = []
             for index in range(args.runs or case.runs):
-                result = execute_run(case, arm, index, args, claude, workspaces, hooks_brain)
-                result["graders"] = grade(case, result)
+                # The ceiling is checked before launch against the worst case, so the true
+                # maximum spend is the suite budget itself, never budget-plus-one-run.
+                if total_cost + args.max_budget_usd > args.suite_budget_usd:
+                    result = skipped_run(case, resolve_model(case, args.model))
+                    skipped += 1
+                    print(f"{case.name}: {arm} run {index} skipped: suite budget")
+                else:
+                    result = execute_run(case, arm, index, args, claude, workspaces, hooks_brain)
+                    result["graders"] = grade(case, result)
                 case_cost += result["cost_usd"]
                 entry["arms"][arm].append(public(result))
                 if brain:
@@ -479,9 +494,9 @@ def run_suite(cases, args):
         suite_rates[arm] = round(sum(rates) / len(rates), 4) if rates else 0.0
     delta = round(suite_rates["with"] - suite_rates["without"], 4) if len(suite_rates) == 2 else None
     below = [c["name"] for c in report["cases"] if "with" in c["pass_rate"] and c["pass_rate"]["with"] < args.threshold]
-    code = 1 if below else 0
+    code = 2 if skipped else 1 if below else 0
     report["totals"] = {"pass_rate": suite_rates, "delta": delta, "cost_usd": round(total_cost, 4),
-                        "skipped": 0, "exit": code}
+                        "skipped": skipped, "exit": code}
     (results_dir / "result.json").write_text(json.dumps(report, indent=2, default=list))
     summary = "  ".join(f"{arm} {rate:.2f}" for arm, rate in suite_rates.items())
     print(f"{'suite ' + suite:28}{summary}" + (f"  delta {delta:+.2f}" if delta is not None else "")
