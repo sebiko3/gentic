@@ -6,6 +6,10 @@ set -uo pipefail
 HOOKS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FAILURES=0
 
+# The brain is machine-wide state under $HOME. Every hook run below gets a throwaway one, so
+# the harness can never write into the user's real memory.
+export GENTIC_BRAIN="$(mktemp -d)/brain.sqlite"
+
 section() { printf '\n\033[1m%s\033[0m\n' "$1"; }
 pass() { printf '  ok    %s\n' "$1"; }
 fail() { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; FAILURES=$((FAILURES + 1)); }
@@ -83,6 +87,25 @@ print(f"{statistics.median(times):.1f}")
 PY
 )
 if awk "BEGIN{exit !($PRE_MEDIAN < 150)}"; then pass "median ${PRE_MEDIAN}ms < 150ms"; else fail "median ${PRE_MEDIAN}ms exceeds 150ms"; fi
+
+section "Latency budget (PostToolUse with a brain write, median of 20)"
+POST_MEDIAN=$(cd "$HOOKS" && python3 - <<'PY'
+import json, statistics, subprocess, sys, tempfile, time
+from pathlib import Path
+root = tempfile.mkdtemp()
+(Path(root) / ".git").mkdir()
+payload = json.dumps({"hook_event_name": "PostToolUse", "tool_name": "Bash",
+                      "tool_input": {"command": "pytest tests/ -x"}, "tool_output": {"exit_code": 1},
+                      "cwd": root, "session_id": "bench"})
+times = []
+for _ in range(20):
+    start = time.perf_counter()
+    subprocess.run([sys.executable, "post_tool_use.py"], input=payload, capture_output=True, text=True)
+    times.append((time.perf_counter() - start) * 1000)
+print(f"{statistics.median(times):.1f}")
+PY
+)
+if awk "BEGIN{exit !($POST_MEDIAN < 150)}"; then pass "median ${POST_MEDIAN}ms < 150ms"; else fail "median ${POST_MEDIAN}ms exceeds 150ms"; fi
 
 section "Isolation: hooks never write into a project's .claude directory"
 # Only quoted path literals count; prose mentions of ~/.claude in docstrings are not paths.

@@ -144,20 +144,24 @@ def record_event(cwd, session, kind, detail, data=None):
     Returns True when a row was written, False when the brain was unavailable or `cwd` has
     no git root (events without a project would be noise).
     """
-    project = project_key(cwd)
-    if not project:
-        return False
-    conn = connect()
     try:
-        conn.execute(
-            "INSERT INTO events (ts, project, session, kind, detail, data) VALUES (?,?,?,?,?,?)",
-            (time.time(), project, session, kind, scrub(str(detail))[:DETAIL_CHARS],
-             json.dumps(data) if data is not None else None),
-        )
-        conn.commit()
-    finally:
-        conn.close()
-    return True
+        project = project_key(cwd)
+        if not project:
+            return False
+        conn = connect()
+        try:
+            conn.execute(
+                "INSERT INTO events (ts, project, session, kind, detail, data) VALUES (?,?,?,?,?,?)",
+                (time.time(), project, session, kind, scrub(str(detail))[:DETAIL_CHARS],
+                 json.dumps(data) if data is not None else None),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return True
+    except Exception:
+        # A brain that cannot be opened, created or locked in time is invisible to the session.
+        return False
 
 
 # --- CLI commands ----------------------------------------------------------------------

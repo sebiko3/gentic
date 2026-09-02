@@ -3,7 +3,8 @@
 
 Records four things per turn: whether code (as opposed to prose) was edited, whether any of
 those edits was a test file, whether a recognised verification command succeeded, and whether
-one *failed*. `stop.py` reads the result.
+one *failed*. `stop.py` reads the result. The verification outcome is also appended to the
+brain as a `red` or `verification` event — best-effort, so a missing brain changes nothing.
 
 A failed verification run is the RED signal of test-first work, which is why it is kept rather
 than discarded: "the test failed before the code was written" is only observable here.
@@ -21,7 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib import common, token_efficiency  # noqa: E402
+from lib import brain, common, token_efficiency  # noqa: E402
 
 VERIFICATION = re.compile(
     r"\b("
@@ -96,10 +97,12 @@ def main():
             code = exit_code_of(payload)
             entry = {"command": command[:300], "exit_code": code, "ts": time.time()}
             # An unknown exit code counts as success evidence; a known failure is RED instead.
-            if code is None or code == 0:
+            kind = "verification" if code is None or code == 0 else "red"
+            if kind == "verification":
                 state["evidence"].append(entry)
             else:
                 state.setdefault("red", []).append(entry)
+            brain.record_event(payload.get("cwd"), payload.get("session_id"), kind, command)
             changed = True
 
     elif tool in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
