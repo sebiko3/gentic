@@ -218,5 +218,54 @@ class TheDocumentedContract(unittest.TestCase):
         self.assertEqual(offenders, [], f"quoted .claude literal: {offenders}")
 
 
+class Authorizations(unittest.TestCase):
+    """Standing permissions: a grant in the project's CLAUDE.md counts only when the machine
+    also trusts the project. A clone must never be able to grant itself."""
+
+    GRANTS = "# Project\n\n## gentic authorizations\n- push\n- open-pr — CI is required here\n- Push\n\n## Other\n- merge-on-green\n"
+
+    def setUp(self):
+        self.trust = Path(tempfile.mkdtemp(prefix="trust-")) / "trusted-projects"
+
+    def env(self, *roots):
+        self.trust.write_text("".join(str(Path(r).resolve()) + "\n" for r in roots))
+        return dict(os.environ, GENTIC_TRUST=str(self.trust))
+
+    def test_authorized_reads_the_section(self):
+        repo = make_repo(claude_md=self.GRANTS)
+        env = self.env(repo)
+        result = helper("authorized", "push", root=repo, env=env)
+        self.assertEqual(result.returncode, 0, "authorized push")
+        self.assertEqual(result.stdout.strip(), "yes")
+        self.assertEqual(helper("authorized", "open-pr", root=repo, env=env).stdout.strip(), "yes")
+        denied = helper("authorized", "merge-on-green", root=repo, env=env)
+        self.assertEqual((denied.returncode, denied.stdout.strip()), (1, "no"))
+        listed = helper("authorized", "--list", root=repo, env=env)
+        self.assertEqual(listed.returncode, 0)
+        self.assertEqual(listed.stdout, "push\nopen-pr\n")
+
+    def test_authorized_fails_closed(self):
+        repo = make_repo(claude_md=self.GRANTS)
+        untrusted = helper("authorized", "push", root=repo, env=self.env())
+        self.assertEqual(untrusted.returncode, 1, "untrusted must be a no")
+        self.assertEqual(untrusted.stdout.strip(), "no")
+        self.assertIn("not trusted", untrusted.stderr)
+        no_section = make_repo(claude_md="# Project\n\nWe push often.\n")
+        no_file = make_repo(claude_md=None)
+        prose = make_repo(claude_md="## gentic authorizations\n\nWe allow push here.\n")
+        env = self.env(repo, no_section, no_file, prose)   # all trusted; the section decides
+        self.assertEqual(helper("authorized", "push", root=no_section, env=env).returncode, 1)
+        self.assertEqual(helper("authorized", "push", root=no_file, env=env).returncode, 1)
+        unknown = helper("authorized", "deploy", root=repo, env=env)
+        self.assertEqual(unknown.returncode, 1)
+        self.assertIn("unknown action", unknown.stderr)
+        self.assertEqual(helper("authorized", "push", root=prose, env=env).returncode, 1)
+
+    def test_branch_and_commit_still_need_a_slug(self):
+        repo = make_repo()
+        self.assertEqual(helper("branch", root=repo).returncode, 2)
+        self.assertEqual(helper("commit", root=repo).returncode, 2)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)
