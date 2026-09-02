@@ -63,7 +63,8 @@ SCHEMA = (
     " project TEXT, slug TEXT, path TEXT, sha TEXT, ts REAL, PRIMARY KEY(project, slug, path))",
     "CREATE TABLE IF NOT EXISTS eval_runs ("
     " id INTEGER PRIMARY KEY, ts REAL, project TEXT, suite TEXT, case_name TEXT, arm TEXT,"
-    " run_index INTEGER, model TEXT, cost_usd REAL, turns INTEGER, is_error INTEGER, skipped INTEGER)",
+    " run_index INTEGER, model TEXT, cost_usd REAL, turns INTEGER, is_error INTEGER, skipped INTEGER,"
+    " exhausted INTEGER DEFAULT 0)",
     "CREATE TABLE IF NOT EXISTS eval_graders ("
     " id INTEGER PRIMARY KEY, run_id INTEGER, name TEXT, type TEXT, passed INTEGER, detail TEXT)",
 )
@@ -122,6 +123,10 @@ def has_fts(conn):
 def ensure_schema(conn):
     for statement in SCHEMA:
         conn.execute(statement)
+    # One additive, idempotent migration: brains created before eval_runs.exhausted existed.
+    columns = [row[1] for row in conn.execute("PRAGMA table_info(eval_runs)")]
+    if columns and "exhausted" not in columns:
+        conn.execute("ALTER TABLE eval_runs ADD COLUMN exhausted INTEGER DEFAULT 0")
     if fts_wanted() and not has_fts(conn):
         try:
             for statement in FTS_SCHEMA:
@@ -192,7 +197,7 @@ def summary(project):
 
 # --- eval scores (written by evals/run.py, read by `evals`) ------------------------------
 
-def record_eval_run(cwd, suite, case_name, arm, run_index, model, cost_usd, turns, is_error, skipped):
+def record_eval_run(cwd, suite, case_name, arm, run_index, model, cost_usd, turns, is_error, skipped, exhausted=0):
     """One row per headless eval session. Best-effort: returns the row id, or None."""
     try:
         project = project_key(cwd)
@@ -202,9 +207,9 @@ def record_eval_run(cwd, suite, case_name, arm, run_index, model, cost_usd, turn
         try:
             cursor = conn.execute(
                 "INSERT INTO eval_runs (ts, project, suite, case_name, arm, run_index, model, cost_usd,"
-                " turns, is_error, skipped) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                " turns, is_error, skipped, exhausted) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 (time.time(), project, suite, case_name, arm, int(run_index), model, float(cost_usd or 0),
-                 int(turns or 0), int(bool(is_error)), int(bool(skipped))),
+                 int(turns or 0), int(bool(is_error)), int(bool(skipped)), int(bool(exhausted))),
             )
             conn.commit()
             return cursor.lastrowid
@@ -244,16 +249,18 @@ def eval_summary(conn, project, suite=None, every_project=False):
             return None, {}
         suite = row[0]
     runs = conn.execute(
-        "SELECT id, case_name, arm, cost_usd, skipped FROM eval_runs WHERE suite = ?" + scope_sql + " ORDER BY id",
+        "SELECT id, case_name, arm, cost_usd, skipped, exhausted FROM eval_runs WHERE suite = ?" + scope_sql + " ORDER BY id",
         (suite, *scope),
     ).fetchall()
     cases = {}
-    for run_id, case_name, arm, cost, skipped in runs:
+    for run_id, case_name, arm, cost, skipped, exhausted in runs:
         graders = conn.execute("SELECT passed FROM eval_graders WHERE run_id = ?", (run_id,)).fetchall()
         passed = sum(1 for (p,) in graders if p)
         total = len(graders)
-        bucket = cases.setdefault(case_name, {}).setdefault(arm, {"passed": 0, "total": 0, "scores": [], "cost": 0.0, "skipped": 0})
+        bucket = cases.setdefault(case_name, {}).setdefault(arm, {"passed": 0, "total": 0, "scores": [], "cost": 0.0,
+                                                                  "skipped": 0, "exhausted": 0})
         bucket["cost"] += cost or 0
+        bucket["exhausted"] += int(exhausted or 0)
         if skipped:
             bucket["skipped"] += 1
             continue
@@ -284,7 +291,8 @@ def cmd_evals(args, conn, project):
             if bucket["skipped"] and not bucket["scores"]:
                 parts.append(f"{arm} skipped: suite budget")
                 continue
-            parts.append(f"{arm} {bucket['passed']}/{bucket['total']} ({bucket['rate']:.2f})")
+            flag = " exhausted" if bucket["exhausted"] else ""
+            parts.append(f"{arm} {bucket['passed']}/{bucket['total']} ({bucket['rate']:.2f}){flag}")
             suite_rates.setdefault(arm, []).append(bucket["rate"])
         if "with" in arms and "without" in arms:
             parts.append(f"delta {arms['with']['rate'] - arms['without']['rate']:+.2f}")

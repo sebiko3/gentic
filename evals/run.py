@@ -517,7 +517,7 @@ def run_suite(cases, args):
                 if brain:
                     run_id = brain.record_eval_run(str(REPO), suite, case.name, arm, index, result["model"],
                                                    result["cost_usd"], result["turns"], result["is_error"],
-                                                   result["skipped"])
+                                                   result["skipped"], result.get("exhausted", False))
                     for verdict in result["graders"] if run_id else ():
                         brain.record_eval_grader(run_id, verdict["name"], verdict["type"], verdict["passed"], verdict["detail"])
             entry["pass_rate"][arm] = round(arm_rate(entry["arms"][arm]), 4)
