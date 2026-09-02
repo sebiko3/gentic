@@ -61,6 +61,11 @@ SCHEMA = (
     " outcome TEXT, UNIQUE(project, slug))",
     "CREATE TABLE IF NOT EXISTS stamps ("
     " project TEXT, slug TEXT, path TEXT, sha TEXT, ts REAL, PRIMARY KEY(project, slug, path))",
+    "CREATE TABLE IF NOT EXISTS eval_runs ("
+    " id INTEGER PRIMARY KEY, ts REAL, project TEXT, suite TEXT, case_name TEXT, arm TEXT,"
+    " run_index INTEGER, model TEXT, cost_usd REAL, turns INTEGER, is_error INTEGER, skipped INTEGER)",
+    "CREATE TABLE IF NOT EXISTS eval_graders ("
+    " id INTEGER PRIMARY KEY, run_id INTEGER, name TEXT, type TEXT, passed INTEGER, detail TEXT)",
 )
 
 FTS_SCHEMA = (
@@ -183,6 +188,115 @@ def summary(project):
         return lessons, preferences
     except Exception:
         return None
+
+
+# --- eval scores (written by evals/run.py, read by `evals`) ------------------------------
+
+def record_eval_run(cwd, suite, case_name, arm, run_index, model, cost_usd, turns, is_error, skipped):
+    """One row per headless eval session. Best-effort: returns the row id, or None."""
+    try:
+        project = project_key(cwd)
+        if not project:
+            return None
+        conn = connect(timeout=1.0)
+        try:
+            cursor = conn.execute(
+                "INSERT INTO eval_runs (ts, project, suite, case_name, arm, run_index, model, cost_usd,"
+                " turns, is_error, skipped) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (time.time(), project, suite, case_name, arm, int(run_index), model, float(cost_usd or 0),
+                 int(turns or 0), int(bool(is_error)), int(bool(skipped))),
+            )
+            conn.commit()
+            return cursor.lastrowid
+        finally:
+            conn.close()
+    except Exception:
+        return None
+
+
+def record_eval_grader(run_id, name, type_, passed, detail):
+    """One row per grader verdict. Best-effort: True when written, None otherwise."""
+    try:
+        conn = connect(timeout=1.0)
+        try:
+            conn.execute(
+                "INSERT INTO eval_graders (run_id, name, type, passed, detail) VALUES (?,?,?,?,?)",
+                (int(run_id), name, type_, int(bool(passed)), detail),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return True
+    except Exception:
+        return None
+
+
+def eval_summary(conn, project, suite=None, every_project=False):
+    """Per-case rows for one suite: {case: {arm: {"passed", "total", "rate", "cost", "skipped"}}}.
+
+    Rate is the mean over runs of passed/total graders (a skipped or graderless run scores 0);
+    cost is summed from eval_runs only, never from grader rows.
+    """
+    scope_sql, scope = ("", ()) if every_project else (" AND project = ?", (project,))
+    if suite is None:
+        row = conn.execute("SELECT suite FROM eval_runs WHERE 1=1" + scope_sql + " ORDER BY id DESC LIMIT 1", scope).fetchone()
+        if not row:
+            return None, {}
+        suite = row[0]
+    runs = conn.execute(
+        "SELECT id, case_name, arm, cost_usd, skipped FROM eval_runs WHERE suite = ?" + scope_sql + " ORDER BY id",
+        (suite, *scope),
+    ).fetchall()
+    cases = {}
+    for run_id, case_name, arm, cost, skipped in runs:
+        graders = conn.execute("SELECT passed FROM eval_graders WHERE run_id = ?", (run_id,)).fetchall()
+        passed = sum(1 for (p,) in graders if p)
+        total = len(graders)
+        bucket = cases.setdefault(case_name, {}).setdefault(arm, {"passed": 0, "total": 0, "scores": [], "cost": 0.0, "skipped": 0})
+        bucket["cost"] += cost or 0
+        if skipped:
+            bucket["skipped"] += 1
+            continue
+        bucket["passed"] += passed
+        bucket["total"] += total
+        bucket["scores"].append(passed / total if total else 0.0)
+    for arms in cases.values():
+        for bucket in arms.values():
+            bucket["rate"] = sum(bucket["scores"]) / len(bucket["scores"]) if bucket["scores"] else 0.0
+    return suite, cases
+
+
+def cmd_evals(args, conn, project):
+    suite, cases = eval_summary(conn, project, args.suite, args.all)
+    if suite is None:
+        print("no eval suites recorded")
+        return 1
+    print(f"suite {suite}")
+    suite_rates = {}
+    for case_name, arms in cases.items():
+        parts = [f"{case_name:28}"]
+        cost = 0.0
+        for arm in ("with", "without"):
+            bucket = arms.get(arm)
+            if not bucket:
+                continue
+            cost += bucket["cost"]
+            if bucket["skipped"] and not bucket["scores"]:
+                parts.append(f"{arm} skipped: suite budget")
+                continue
+            parts.append(f"{arm} {bucket['passed']}/{bucket['total']} ({bucket['rate']:.2f})")
+            suite_rates.setdefault(arm, []).append(bucket["rate"])
+        if "with" in arms and "without" in arms:
+            parts.append(f"delta {arms['with']['rate'] - arms['without']['rate']:+.2f}")
+        parts.append(f"${cost:.2f}")
+        print("  ".join(parts))
+    if suite_rates:
+        means = {arm: sum(r) / len(r) for arm, r in suite_rates.items()}
+        line = "  ".join(f"{arm} {rate:.2f}" for arm, rate in means.items())
+        if len(means) == 2:
+            line += f"  delta {means['with'] - means['without']:+.2f}"
+        print(f"{'suite':28}{line}")
+    return 0
 
 
 # --- CLI commands ----------------------------------------------------------------------
@@ -440,6 +554,11 @@ def build_parser():
     finish.add_argument("slug")
     finish.add_argument("--outcome", choices=("done", "stopped"), required=True)
     p.set_defaults(fn=cmd_run)
+
+    p = sub.add_parser("evals", parents=[scoped], help="scores of the latest (or named) eval suite")
+    p.add_argument("--suite", default=None)
+    p.add_argument("--all", action="store_true", help="every project")
+    p.set_defaults(fn=cmd_evals)
 
     p = sub.add_parser("stamp", parents=[scoped], help="record sha256 of the skill/agent files a run used")
     p.add_argument("slug")

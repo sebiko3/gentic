@@ -414,8 +414,31 @@ def console_line(name, arms, cost):
     return "  ".join(parts)
 
 
+def load_brain():
+    """gentic's brain module, imported from the hooks library. None under --no-brain."""
+    lib = str(REPO / ".claude" / "hooks" / "lib")
+    sys.path.insert(0, lib)
+    try:
+        import brain  # noqa: F401
+    finally:
+        sys.path.remove(lib)
+    return brain
+
+
+def installed_files():
+    """The skill and agent files the `with` arm actually runs: the installed copies."""
+    home = Path(os.environ.get("CLAUDE_HOME") or Path.home() / ".claude")
+    return sorted(str(p) for p in home.glob("skills/gentic*/SKILL.md")) + sorted(str(p) for p in home.glob("agents/*.md"))
+
+
 def run_suite(cases, args):
     suite = time.strftime("%Y%m%d-%H%M%S")
+    brain = None if args.no_brain else load_brain()
+    if brain:
+        brain.main(["--project", REPO.name, "run", "start", suite, "--goal", f"eval suite {suite}"])
+        files = installed_files()
+        if files:
+            brain.main(["--project", REPO.name, "stamp", suite, *files])
     results_dir = Path(args.evals_dir) / "results" / suite
     workspaces = results_dir / "workspaces"
     workspaces.mkdir(parents=True, exist_ok=True)
@@ -438,6 +461,12 @@ def run_suite(cases, args):
                 result["graders"] = grade(case, result)
                 case_cost += result["cost_usd"]
                 entry["arms"][arm].append(public(result))
+                if brain:
+                    run_id = brain.record_eval_run(str(REPO), suite, case.name, arm, index, result["model"],
+                                                   result["cost_usd"], result["turns"], result["is_error"],
+                                                   result["skipped"])
+                    for verdict in result["graders"] if run_id else ():
+                        brain.record_eval_grader(run_id, verdict["name"], verdict["type"], verdict["passed"], verdict["detail"])
             entry["pass_rate"][arm] = round(arm_rate(entry["arms"][arm]), 4)
         if "with" in entry["arms"] and "without" in entry["arms"]:
             entry["delta"] = round(entry["pass_rate"]["with"] - entry["pass_rate"]["without"], 4)
@@ -459,6 +488,9 @@ def run_suite(cases, args):
           + f"  ${total_cost:.2f}  exit {code}")
     if below:
         print("below threshold: " + ", ".join(below))
+    if brain:
+        brain.main(["--project", REPO.name, "run", "finish", suite, "--outcome",
+                    "stopped" if report["totals"]["skipped"] else "done"])
     return code
 
 
