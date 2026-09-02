@@ -225,6 +225,74 @@ class Graders(EvalsCase):
         self.assertIn("timeout after 1s", arm["graders"][0]["detail"])
 
 
+EXHAUSTED = "\n".join([
+    json.dumps({"type": "system", "subtype": "init", "tools": ["Read", "Write", "Bash"]}),
+    json.dumps({"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "name": "Write", "input": {"file_path": "docs/gentic/x/brief.md", "content": "# Brief"}},
+    ]}}),
+    json.dumps({"type": "assistant", "message": {"content": [{"type": "text", "text": "Nearly there, one more step."}]}}),
+    json.dumps({"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "name": "Bash", "input": {"command": "python3 -m unittest"}},
+    ]}}),
+    json.dumps({"type": "result", "subtype": "error_max_turns", "is_error": True, "result": None,
+                "total_cost_usd": 0.7, "num_turns": 4, "stop_reason": "tool_use"}),
+]) + "\n"
+
+
+class Transcripts(EvalsCase):
+    def test_transcript_is_kept_per_run(self):
+        self.case("one", graders={"done": {"type": "regex", "pattern": "PROVEN"},
+                                  "no-leak": {"type": "file_exists", "path": "transcript.jsonl"}})
+        self.run_runner("--arm", "with")
+        result = self.result_json()
+        entry = result["cases"][0]["arms"]["with"][0]
+        suite_dir = self.evals / "results" / result["suite"]
+        self.assertTrue(entry.get("transcript") and (suite_dir / entry["transcript"]).is_file(), "transcript.jsonl missing")
+        self.assertEqual((suite_dir / entry["transcript"]).read_text(), TRANSCRIPT)
+        self.assertTrue(entry.get("stderr") and (suite_dir / entry["stderr"]).is_file(), "stderr.txt missing")
+        verdict = {g["name"]: g for g in entry["graders"]}
+        self.assertFalse(verdict["no-leak"]["passed"], "transcript.jsonl counted as a created file")
+
+
+class Exhaustion(EvalsCase):
+    def exhausted_transcript(self):
+        path = self.tmp / "exhausted.jsonl"
+        path.write_text(EXHAUSTED)
+        return str(path)
+
+    def test_exhausted_run_is_scored_on_its_files(self):
+        self.case("one", graders={"brief-created": {"type": "file_exists", "path": "docs/gentic/*/brief.md"},
+                                  "used-write": {"type": "tool_used", "tool": "Write"}})
+        proc = self.run_runner("--arm", "with", env={"FAKE_CLAUDE_TRANSCRIPT": self.exhausted_transcript(),
+                                                     "FAKE_CLAUDE_EXIT": "1",
+                                                     "FAKE_CLAUDE_TOUCH": "docs/gentic/x/brief.md"})
+        entry = self.result_json()["cases"][0]["arms"]["with"][0]
+        verdict = {g["name"]: g for g in entry["graders"]}
+        self.assertTrue(verdict["brief-created"]["passed"],
+                        f"file grader failed on an exhausted run: {verdict['brief-created']['detail']}")
+        self.assertTrue(verdict["used-write"]["passed"])
+        self.assertTrue(entry["exhausted"])
+        self.assertFalse(entry["is_error"])
+        self.assertIn("exhausted", proc.stdout)
+
+        broken = self.tmp / "broken.jsonl"
+        broken.write_text(TRANSCRIPT)
+        self.run_runner("--arm", "with", env={"FAKE_CLAUDE_TRANSCRIPT": str(broken), "FAKE_CLAUDE_EXIT": "1"})
+        entry = self.result_json()["cases"][0]["arms"]["with"][0]
+        self.assertTrue(entry["is_error"], "a non-zero exit with a success subtype must stay an error")
+        self.assertFalse(entry["exhausted"])
+
+    def test_last_message_falls_back_to_assistant_text(self):
+        self.case("one", graders={"nearly": {"type": "regex", "pattern": "nearly there", "flags": "i"}})
+        self.run_runner("--arm", "with", env={"FAKE_CLAUDE_TRANSCRIPT": self.exhausted_transcript(), "FAKE_CLAUDE_EXIT": "1"})
+        grader = self.result_json()["cases"][0]["arms"]["with"][0]["graders"][0]
+        self.assertTrue(grader["passed"], grader["detail"])
+        self.case("two", graders={"result-wins": {"type": "regex", "pattern": "Scouting", "match": "not_contains"}})
+        self.run_runner("--arm", "with", "--case", "two")
+        grader = self.result_json()["cases"][0]["arms"]["with"][0]["graders"][0]
+        self.assertTrue(grader["passed"], "the string result must win over assistant text blocks")
+
+
 class Scaffold(EvalsCase):
     def test_scaffold_runs_first_and_is_not_created(self):
         case = self.case("one", graders={"fixture-not-created": {"type": "file_exists", "path": "fixture.txt"}})
@@ -271,6 +339,28 @@ class BrainRows(EvalsCase):
         fresh = self.tmp / "fresh.sqlite"
         self.run_runner("--arm", "with", "--no-brain", env={"GENTIC_BRAIN": str(fresh)})
         self.assertFalse(fresh.exists(), "--no-brain still touched the brain")
+
+
+class BrainExhausted(EvalsCase):
+    R2_EVAL_RUNS = ("CREATE TABLE eval_runs (id INTEGER PRIMARY KEY, ts REAL, project TEXT, suite TEXT,"
+                    " case_name TEXT, arm TEXT, run_index INTEGER, model TEXT, cost_usd REAL, turns INTEGER,"
+                    " is_error INTEGER, skipped INTEGER)")
+
+    def test_brain_exhausted_column_and_summary(self):
+        with sqlite3.connect(self.brain_db) as conn:
+            conn.execute(self.R2_EVAL_RUNS)   # a brain created by R2's schema, without the column
+        self.case("one", graders={"brief-created": {"type": "file_exists", "path": "docs/gentic/*/brief.md"}})
+        exhausted = self.tmp / "exhausted.jsonl"
+        exhausted.write_text(EXHAUSTED)
+        self.run_runner("--arm", "with", env={"FAKE_CLAUDE_TRANSCRIPT": str(exhausted), "FAKE_CLAUDE_EXIT": "1",
+                                              "FAKE_CLAUDE_TOUCH": "docs/gentic/x/brief.md"})
+        with sqlite3.connect(self.brain_db) as conn:
+            columns = [row[1] for row in conn.execute("PRAGMA table_info(eval_runs)")]
+            self.assertIn("exhausted", columns)
+            self.assertEqual(conn.execute("select exhausted from eval_runs").fetchone()[0], 1)
+        summary = subprocess.run([sys.executable, str(BRAIN), "evals"], cwd=str(REPO), text=True, capture_output=True,
+                                 env=dict(os.environ, GENTIC_BRAIN=str(self.brain_db)))
+        self.assertIn("with 1/1 (1.00) exhausted", summary.stdout)
 
 
 class Money(EvalsCase):

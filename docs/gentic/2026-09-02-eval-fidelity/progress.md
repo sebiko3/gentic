@@ -12,7 +12,7 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 ## Tasks
 | # | Task | Size | Depends on | Test | RED | Status |
 |---|------|------|------------|------|-----|--------|
-| 1 | Transcripts on disk, exhaustion classification, last-message fallback (F1, F2, F3) | 5 | — | `tests/test_evals.py::test_transcript_is_kept_per_run`, `::test_exhausted_run_is_scored_on_its_files`, `::test_last_message_falls_back_to_assistant_text` | | pending |
+| 1 | Transcripts on disk, exhaustion classification, last-message fallback (F1, F2, F3) | 5 | — | `tests/test_evals.py::test_transcript_is_kept_per_run`, `::test_exhausted_run_is_scored_on_its_files`, `::test_last_message_falls_back_to_assistant_text` | `AssertionError: None is not true : transcript.jsonl missing`; `AssertionError: False is not true : file grader failed on an exhausted run: claude exited 1:`; after F1+F2 landed: `AssertionError: False is not true : no match for /nearly there/ in last_message` | done |
 | 2 | Brain `exhausted` column (guarded ALTER), record, summary (F4) | 2 | 1 | `::test_brain_exhausted_column_and_summary` | | pending |
 | 3 | Per-run cost accumulation, budgets 3, runs 3, 55 turns, parser rule, agent graders/prompts/fixtures (F5, F6) | 5 | 1 | `::test_invocation_flags_per_arm`, `::test_five_cases_are_well_formed`, `::test_money_ceiling_and_exit_codes`, `::test_definition_graders_are_in_place` | | pending |
 | 4 | Docs and harness (F7, F8) | 2 | 1-3 | `::test_docs_fidelity_is_documented`; `run.sh` | | pending |

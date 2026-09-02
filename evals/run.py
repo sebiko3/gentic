@@ -246,9 +246,12 @@ def claude_version(claude):
         return "unknown"
 
 
+RUN_ARTIFACTS = {"transcript.jsonl", "stderr.txt"}   # written by the runner, never "created"
+
+
 def parse_transcript(text):
-    """(last message, tool uses, cost, turns, is_error) from stream-json lines."""
-    last, tools, cost, turns, is_error = "", [], 0.0, 0, False
+    """Facts from stream-json lines: result text, subtype, tool uses, cost, turns, is_error."""
+    last, tools, cost, turns, is_error, subtype, last_text = "", [], 0.0, 0, False, "", ""
     for line in text.splitlines():
         line = line.strip()
         if not line.startswith("{"):
@@ -260,19 +263,30 @@ def parse_transcript(text):
         kind = message.get("type")
         if kind == "assistant":
             content = (message.get("message") or {}).get("content") or []
+            texts = []
             for block in content:
-                if isinstance(block, dict) and block.get("type") == "tool_use":
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") == "tool_use":
                     tools.append({"name": str(block.get("name")), "input": block.get("input") or {}})
+                elif block.get("type") == "text" and str(block.get("text") or "").strip():
+                    texts.append(str(block["text"]))
+            if texts:
+                last_text = "\n".join(texts)
         elif kind == "result":
             last = str(message.get("result") or "")
             cost = float(message.get("total_cost_usd") or 0)
             turns = int(message.get("num_turns") or 0)
             is_error = bool(message.get("is_error"))
-    return last, tools, cost, turns, is_error
+            subtype = str(message.get("subtype") or "")
+    # The result text wins; an exhausted session has none, so its last spoken text stands in.
+    return {"result": last or last_text, "tools": tools, "cost": cost, "turns": turns,
+            "is_error": is_error, "subtype": subtype}
 
 
 def snapshot(workspace):
-    return {str(p.relative_to(workspace)) for p in Path(workspace).rglob("*") if p.is_file()}
+    return {str(p.relative_to(workspace)) for p in Path(workspace).rglob("*")
+            if p.is_file() and p.name not in RUN_ARTIFACTS}
 
 
 def scaffold(case, workspace):
@@ -296,7 +310,8 @@ def execute_run(case, arm, index, args, claude, workspaces, hooks_brain):
     workspace = workspaces / f"{case.name}-{arm}-{index}"
     workspace.mkdir(parents=True, exist_ok=True)
     model = resolve_model(case, args.model)
-    entry = {"model": model, "cost_usd": 0.0, "turns": 0, "is_error": False, "skipped": False,
+    entry = {"model": model, "cost_usd": 0.0, "turns": 0, "is_error": False, "exhausted": False,
+             "skipped": False, "transcript": None, "stderr": None,
              "graders": [], "_last": "", "_tools": [], "_created": set(), "_error": None}
     env = dict(os.environ, GENTIC_BRAIN=str(hooks_brain))
     problem = scaffold(case, workspace)
@@ -311,17 +326,35 @@ def execute_run(case, arm, index, args, claude, workspaces, hooks_brain):
             proc = subprocess.run([claude, *claude_argv(case, arm, model, args.max_budget_usd)],
                                   cwd=str(workspace), env=env, stdin=devnull, text=True,
                                   capture_output=True, timeout=case.timeout_seconds)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
         entry["is_error"] = True
         entry["_error"] = f"timeout after {case.timeout_seconds}s"
         entry["_created"] = snapshot(workspace) - before
+        keep_output(entry, workspace, workspaces.parent, exc.stdout, exc.stderr)
         return entry
-    last, tools, cost, turns, is_error = parse_transcript(proc.stdout)
-    entry.update({"cost_usd": cost, "turns": turns, "is_error": is_error or proc.returncode != 0,
-                  "_last": last, "_tools": tools, "_created": snapshot(workspace) - before})
-    if proc.returncode != 0 and not entry["_error"]:
+    entry["_created"] = snapshot(workspace) - before
+    keep_output(entry, workspace, workspaces.parent, proc.stdout, proc.stderr)
+    facts = parse_transcript(proc.stdout)
+    entry.update({"cost_usd": facts["cost"], "turns": facts["turns"], "_last": facts["result"], "_tools": facts["tools"]})
+    if facts["subtype"] == "error_max_turns":
+        # The session ran out of turns: what it created and did is real, so it is graded.
+        entry["exhausted"] = True
+    elif proc.returncode != 0 or facts["is_error"]:
+        entry["is_error"] = True
         entry["_error"] = f"claude exited {proc.returncode}: {proc.stderr.strip()[:300]}"
     return entry
+
+
+def keep_output(entry, workspace, results_dir, stdout, stderr):
+    """Raw stdout and stderr next to the workspace, after the created-file snapshot."""
+    def text(value):
+        if value is None:
+            return ""
+        return value.decode(errors="replace") if isinstance(value, bytes) else str(value)
+    for key, name, value in (("transcript", "transcript.jsonl", stdout), ("stderr", "stderr.txt", stderr)):
+        path = workspace / name
+        path.write_text(text(value))
+        entry[key] = str(path.relative_to(results_dir))
 
 
 # --- grading ---------------------------------------------------------------------------
@@ -373,7 +406,8 @@ def evaluate(grader, entry):
 
 
 def skipped_run(case, model):
-    return {"model": model, "cost_usd": 0.0, "turns": 0, "is_error": False, "skipped": True,
+    return {"model": model, "cost_usd": 0.0, "turns": 0, "is_error": False, "exhausted": False,
+            "skipped": True, "transcript": None, "stderr": None,
             "graders": [{"name": g.name, "type": g.type, "passed": False, "detail": "skipped: suite budget"}
                         for g in case.graders],
             "_last": "", "_tools": [], "_created": set(), "_error": "skipped: suite budget"}
@@ -417,7 +451,8 @@ def console_line(name, arms, cost):
             parts.append(f"{arm} skipped: suite budget")
             continue
         passed, total = counts(runs)
-        parts.append(f"{arm} {passed}/{total} ({arm_rate(runs):.2f})")
+        flag = " exhausted" if any(r.get("exhausted") for r in runs) else ""
+        parts.append(f"{arm} {passed}/{total} ({arm_rate(runs):.2f}){flag}")
     if "with" in arms and "without" in arms:
         parts.append(f"delta {arm_rate(arms['with']) - arm_rate(arms['without']):+.2f}")
     parts.append(f"${cost:.2f}")
