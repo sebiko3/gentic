@@ -325,7 +325,7 @@ class FiveCases(unittest.TestCase):
                     self.assertTrue(case.scaffold_script, f"{name} has no scaffold")
                     self.assertTrue((evals / name / case.scaffold_script).is_file())
         fixture = evals / "csv-export-probe" / "fixture"
-        files = [p for p in fixture.rglob("*") if p.is_file()]
+        files = [p for p in fixture.rglob("*") if p.is_file() and "__pycache__" not in p.parts]
         self.assertLessEqual(len(files), 5)
         self.assertLessEqual(sum(len(p.read_text().splitlines()) for p in files), 200)
         for path in files:

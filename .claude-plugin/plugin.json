@@ -1,0 +1,8 @@
+{
+  "name": "gentic",
+  "version": "0.2.0",
+  "description": "Spec-first, test-first, resumable deep workflow for Claude Code, with a brain and a fitness function.",
+  "experimental": {
+    "evals": "evals"
+  }
+}
