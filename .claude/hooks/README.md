@@ -127,6 +127,15 @@ cp ~/.claude/settings.json.bak-2026-08-17 ~/.claude/settings.json
 That removes the `hooks` key entirely; the scripts become inert. To also remove them:
 `rm -rf ~/.claude/hooks ~/.claude/state`.
 
+## Verification vocabulary
+
+The ledger recognises a verification command by name: pytest, unittest, tox, nox, jest, vitest,
+mocha, ava, the npm/yarn/pnpm test, lint, typecheck and build scripts, go test/build/vet, cargo
+test/build/check/clippy, make test/check/lint/build, tsc, mypy, ruff, flake8, eslint, biome,
+pyright, swift test, xcodebuild, gradle test, mvn test/verify, dotnet test, rspec, phpunit —
+and the UI test runners and audits: **playwright, cypress, lighthouse, axe**. A green run is
+evidence for the Stop gate; a red one is the RED of a test-first task, UI contracts included.
+
 ## The brain
 
 `post_tool_use.py` and `stop.py` also append events to gentic's brain, `~/.claude/gentic/brain.sqlite`

@@ -141,6 +141,43 @@ Dropbox is a known hazard; keep the brain out of synced folders.
 The [`gentic-brain`](.claude/skills/gentic-brain/SKILL.md) skill carries the full command set
 and says where each phase uses it.
 
+## The fitness function
+
+gentic can be scored. `evals/` holds five cases in the case layout that `claude plugin eval`
+documents for Claude Code 2.1.258 — `prompt.md` with frontmatter, `graders/*.md`, an optional
+`case.yaml` with a scaffold script — and `evals/run.py` runs them, because the official command
+is still early-access and disabled on ordinary accounts (the layout is honoured, the command
+itself is unverified here):
+
+```bash
+python3 evals/run.py --dry-run          # preflight, list cases and the exact claude argv, spend nothing
+python3 evals/run.py                    # both arms, one run per case, sonnet, budgets 2 / 21 USD
+python3 ~/.claude/hooks/lib/brain.py evals   # `brain evals`: the latest suite's numbers, from the brain
+```
+
+Every case runs twice, headlessly through `claude -p` in a fresh workspace: the **with** arm
+sees your installed setup exactly as you do; the **without** arm passes
+`--setting-sources project`, which loads no user skills, hooks or agents. The difference is
+the score. Graders are deterministic — `regex` over the final message or the created files,
+`file_exists` over files the agent created, `tool_used` over the transcript — so a number is
+reproducible and free to compute; only the sessions cost money, and they are capped at 2 USD
+per run and 21 USD per suite, checked before each launch. Nothing runs the suite unattended,
+and the hook harness never invokes it.
+
+| Case | What it measures |
+|------|------------------|
+| `csv-export-probe` | The README's own probe: a vague request against a small admin dashboard. Did a brief get written before code, and was exporting `password_hash` surfaced as a decision? |
+| `dod-auditor-false-claim` | A masterprompt claims two files exist; one does not. Does the auditor say FAILED? |
+| `critic-finds-contradiction` | Constraints forbid the network; a DoD item requires a download. Does the critic name that collision? |
+| `executor-refuses-vague` | "improve the code", no spec. Does the executor refuse instead of guessing? |
+| `reviewer-seeded-defect` | The seeded-defect fixture. Both planted defects found, the naming decoy not reported? |
+
+Scores land in two brain tables, `eval_runs` and `eval_graders`, next to the sha256 stamps of
+the installed skills and agents that produced them — so a change to a skill can be compared
+before and after. A `with` case below 1.0 is a finding about the workflow and becomes a brain
+`lesson`; the case is never loosened to pass. Results also go to `evals/results/<suite>/`
+(git-ignored) for humans, workspaces included.
+
 ## Install
 
 ```bash
