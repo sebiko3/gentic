@@ -33,6 +33,7 @@ VERIFICATION = re.compile(
     r"|make (test|check|lint|build)"
     r"|tsc|mypy|ruff|flake8|eslint|biome|pyright"
     r"|swift test|xcodebuild|gradle test|mvn (test|verify)|dotnet test|rspec|phpunit"
+    r"|playwright|cypress|lighthouse|axe"   # UI test runners and audits count too
     r")\b",
     re.I,
 )

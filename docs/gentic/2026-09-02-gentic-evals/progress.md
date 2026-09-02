@@ -18,7 +18,7 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 | 4 | Brain `eval_runs`/`eval_graders`, record functions, `brain evals`, runner integration, `--no-brain` (E5) | 3 | 2 | `::test_brain_rows_and_evals_summary` | | pending |
 | 5 | Money ceiling, order, exit codes, `result.json` totals (E6) | 2 | 3 | `::test_money_ceiling_and_exit_codes` | | pending |
 | 6 | The five cases, fixtures, scaffolds, manifest, gitignore (E7, E12) | 5 | 3 | `::test_five_cases_are_well_formed`, `::test_manifest_and_gitignore` | | pending |
-| 7 | Verification regex gains the UI runners (E8) | 1 | — | `tests/test_tdd.py::test_ui_test_runners_are_verification_commands` | | pending |
+| 7 | Verification regex gains the UI runners (E8) | 1 | — | `tests/test_tdd.py::test_ui_test_runners_are_verification_commands` | `AssertionError: [] == [] : npx run was not recorded as evidence` (×4 runners) and `… a failing playwright run was not recorded as RED` | done |
 | 8 | Harness registration and docs (E10, E11) | 2 | 1-7 | `::test_harness_registers_evals_offline`, `::test_docs_evals_are_documented` | | pending |
 | 9 | Live proof: install check, real suite run, `brain evals`, lessons for failures (E9) | 2 | 8 | n/a — observation of the real system; output pasted here | | pending |
 
