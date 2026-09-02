@@ -5,13 +5,20 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 ## Phases
 - [x] 1 Scout
 - [x] 2 Interview (user delegated all decisions and the turn budget; recorded as `user — delegated`)
-- [ ] 3 Masterprompt
+- [x] 3 Masterprompt (critic: 4 blocking / 14 serious / 12 minor on draft 1, all fixed inline)
 - [ ] 4 Execute
 - [ ] 5 Iterate
 
 ## Tasks
 | # | Task | Size | Depends on | Test | RED | Status |
 |---|------|------|------------|------|-----|--------|
+| 1 | Transcripts on disk, exhaustion classification, last-message fallback (F1, F2, F3) | 5 | — | `tests/test_evals.py::test_transcript_is_kept_per_run`, `::test_exhausted_run_is_scored_on_its_files`, `::test_last_message_falls_back_to_assistant_text` | | pending |
+| 2 | Brain `exhausted` column (guarded ALTER), record, summary (F4) | 2 | 1 | `::test_brain_exhausted_column_and_summary` | | pending |
+| 3 | Per-run cost accumulation, budgets 3, runs 3, 55 turns, parser rule, agent graders/prompts/fixtures (F5, F6) | 5 | 1 | `::test_invocation_flags_per_arm`, `::test_five_cases_are_well_formed`, `::test_money_ceiling_and_exit_codes`, `::test_definition_graders_are_in_place` | | pending |
+| 4 | Docs and harness (F7, F8) | 2 | 1-3 | `::test_docs_fidelity_is_documented`; `run.sh` | | pending |
+| 5 | Live proof, comparison, lessons (F9, F10) | 2 | 4 | n/a — observation of the real system; output pasted here | | pending |
+
+Sizes are planning estimates only; they never spend the iteration budget. Order 1–5.
 
 ## Iteration log
 | # | DoD item | Rung | Points | Result |
