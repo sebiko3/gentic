@@ -34,6 +34,9 @@ argv = sys.argv[1:]
 if argv == ["--help"]:
     print(Path(os.environ["FAKE_CLAUDE_HELP"]).read_text())
     sys.exit(0)
+if argv == ["--version"]:
+    print("2.1.258 (fake)")
+    sys.exit(0)
 cwd = os.getcwd()
 files = sorted(str(p.relative_to(cwd)) for p in Path(cwd).rglob("*") if p.is_file())
 record = {"argv": argv, "cwd": cwd, "files": files, "env_brain": os.environ.get("GENTIC_BRAIN")}

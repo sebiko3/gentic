@@ -234,8 +234,97 @@ def main(argv=None):
     return run_suite(cases, args)
 
 
+# --- running ---------------------------------------------------------------------------
+
+def claude_version(claude):
+    try:
+        return subprocess.run([claude, "--version"], text=True, capture_output=True, timeout=60).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+
+
+def parse_transcript(text):
+    """(last message, tool uses, cost, turns, is_error) from stream-json lines."""
+    last, tools, cost, turns, is_error = "", [], 0.0, 0, False
+    for line in text.splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            message = json.loads(line)
+        except ValueError:
+            continue
+        kind = message.get("type")
+        if kind == "assistant":
+            content = (message.get("message") or {}).get("content") or []
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "tool_use":
+                    tools.append({"name": str(block.get("name")), "input": block.get("input") or {}})
+        elif kind == "result":
+            last = str(message.get("result") or "")
+            cost = float(message.get("total_cost_usd") or 0)
+            turns = int(message.get("num_turns") or 0)
+            is_error = bool(message.get("is_error"))
+    return last, tools, cost, turns, is_error
+
+
+def snapshot(workspace):
+    return {str(p.relative_to(workspace)) for p in Path(workspace).rglob("*") if p.is_file()}
+
+
+def execute_run(case, arm, index, args, claude, workspaces, hooks_brain):
+    """One headless session in a fresh workspace. Returns the arm entry for result.json."""
+    workspace = workspaces / f"{case.name}-{arm}-{index}"
+    workspace.mkdir(parents=True, exist_ok=True)
+    model = resolve_model(case, args.model)
+    entry = {"model": model, "cost_usd": 0.0, "turns": 0, "is_error": False, "skipped": False,
+             "graders": [], "_last": "", "_tools": [], "_created": set(), "_error": None}
+    env = dict(os.environ, GENTIC_BRAIN=str(hooks_brain))
+    before = snapshot(workspace)
+    try:
+        with open(os.devnull) as devnull:
+            proc = subprocess.run([claude, *claude_argv(case, arm, model, args.max_budget_usd)],
+                                  cwd=str(workspace), env=env, stdin=devnull, text=True,
+                                  capture_output=True, timeout=case.timeout_seconds)
+    except subprocess.TimeoutExpired:
+        entry["is_error"] = True
+        entry["_error"] = f"timeout after {case.timeout_seconds}s"
+        entry["_created"] = snapshot(workspace) - before
+        return entry
+    last, tools, cost, turns, is_error = parse_transcript(proc.stdout)
+    entry.update({"cost_usd": cost, "turns": turns, "is_error": is_error or proc.returncode != 0,
+                  "_last": last, "_tools": tools, "_created": snapshot(workspace) - before})
+    if proc.returncode != 0 and not entry["_error"]:
+        entry["_error"] = f"claude exited {proc.returncode}: {proc.stderr.strip()[:300]}"
+    return entry
+
+
+def public(entry):
+    return {k: v for k, v in entry.items() if not k.startswith("_")}
+
+
 def run_suite(cases, args):
-    raise SystemExit("run_suite is delivered by the next task")
+    suite = time.strftime("%Y%m%d-%H%M%S")
+    results_dir = Path(args.evals_dir) / "results" / suite
+    workspaces = results_dir / "workspaces"
+    workspaces.mkdir(parents=True, exist_ok=True)
+    hooks_brain = results_dir / "hooks-brain.sqlite"
+    claude = shutil.which("claude")
+    report = {"suite": suite, "claude_version": claude_version(claude),
+              "model": args.model or DEFAULT_MODEL, "install_in_sync": not args.skip_install_check,
+              "warnings": [], "cases": [], "totals": {}}
+    for case in cases:
+        report["warnings"] += case.warnings
+        entry = {"name": case.name, "tags": case.tags, "arms": {}}
+        for arm in arms_for(args.arm):
+            entry["arms"][arm] = []
+            for index in range(args.runs or case.runs):
+                result = execute_run(case, arm, index, args, claude, workspaces, hooks_brain)
+                entry["arms"][arm].append(public(result))
+        report["cases"].append(entry)
+        print(f"{case.name:28}" + "  ".join(f"{arm} ran {len(runs)}" for arm, runs in entry["arms"].items()))
+    (results_dir / "result.json").write_text(json.dumps(report, indent=2, default=list))
+    return 0
 
 
 if __name__ == "__main__":
