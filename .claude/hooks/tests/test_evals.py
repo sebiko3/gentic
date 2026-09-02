@@ -512,6 +512,11 @@ class Hygiene(unittest.TestCase):
         for runner in ("playwright", "cypress", "lighthouse", "axe"):
             self.assertIn(runner, hooks_readme.lower(), f"hooks README does not name {runner}")
 
+    def test_docs_fidelity_is_documented(self):
+        readme = (REPO / "README.md").read_text(encoding="utf-8")
+        for token in ("transcript.jsonl", "exhausted", "55", "22 turns", "runs: 3", "3 USD"):
+            self.assertIn(token, readme, f"README does not mention {token!r}")
+
     def test_manifest_and_gitignore(self):
         manifest = REPO / ".claude-plugin" / "plugin.json"
         self.assertTrue(manifest.is_file(), ".claude-plugin/plugin.json missing")

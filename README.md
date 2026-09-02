@@ -176,7 +176,18 @@ Scores land in two brain tables, `eval_runs` and `eval_graders`, next to the sha
 the installed skills and agents that produced them — so a change to a skill can be compared
 before and after. A `with` case below 1.0 is a finding about the workflow and becomes a brain
 `lesson`; the case is never loosened to pass. Results also go to `evals/results/<suite>/`
-(git-ignored) for humans, workspaces included.
+(git-ignored) for humans: every run's workspace, its raw `transcript.jsonl` and `stderr.txt`.
+
+Three fidelity rules, each learned from the first live suite. A session that runs out of turns
+is **exhausted**, not failed: the CLI reports `error_max_turns` with no final message, so the
+runner grades what the session created and did and takes its last spoken text as the last
+message; the console and `brain evals` mark such an arm `exhausted`. The workflow case gets
+**55 turns** and every run a **3 USD** cap, because gentic's Scout and Interview alone took
+22 turns in the first suite and a 21-turn limit scored a written brief as nothing. Agent cases
+run three times (`runs: 3` in their frontmatter) because a single reply is noise, and their
+graders assert the shape each agent definition promises — the auditor's `UNVERIFIABLE` verdict
+and closing count, the critic's five named scans, the executor's `status:` line, the reviewer's
+`confidence <n>` and `Not reported` — rather than vocabulary a built-in agent also produces.
 
 ## Install
 
