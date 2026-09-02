@@ -21,6 +21,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -309,12 +310,17 @@ def scaffold(case, workspace):
 
 
 def execute_run(case, arm, index, args, claude, workspaces, hooks_brain):
-    """One headless session in a fresh workspace. Returns the arm entry for result.json."""
+    """One headless session in a fresh workspace. Returns the arm entry for result.json.
+
+    The workspace lives under the system temp directory, never inside this repository: a
+    workspace inside the checkout inherits its project root, and with it `.claude/agents/`
+    and `.claude/skills/`, which would hand the without arm the very things it must lack.
+    """
     workspace = workspaces / f"{case.name}-{arm}-{index}"
     workspace.mkdir(parents=True, exist_ok=True)
     model = resolve_model(case, args.model)
     entry = {"model": model, "cost_usd": 0.0, "turns": 0, "is_error": False, "exhausted": False,
-             "skipped": False, "transcript": None, "stderr": None,
+             "skipped": False, "workspace": str(workspace), "transcript": None, "stderr": None,
              "graders": [], "_last": "", "_tools": [], "_created": set(), "_error": None}
     env = dict(os.environ, GENTIC_BRAIN=str(hooks_brain))
     problem = scaffold(case, workspace)
@@ -333,10 +339,10 @@ def execute_run(case, arm, index, args, claude, workspaces, hooks_brain):
         entry["is_error"] = True
         entry["_error"] = f"timeout after {case.timeout_seconds}s"
         entry["_created"] = snapshot(workspace) - before
-        keep_output(entry, workspace, workspaces.parent, exc.stdout, exc.stderr)
+        keep_output(entry, workspace.name, args.results_dir, exc.stdout, exc.stderr)
         return entry
     entry["_created"] = snapshot(workspace) - before
-    keep_output(entry, workspace, workspaces.parent, proc.stdout, proc.stderr)
+    keep_output(entry, workspace.name, args.results_dir, proc.stdout, proc.stderr)
     facts = parse_transcript(proc.stdout)
     entry.update({"cost_usd": facts["cost"], "turns": facts["turns"], "_last": facts["result"], "_tools": facts["tools"]})
     if facts["subtype"] == "error_max_turns":
@@ -348,14 +354,16 @@ def execute_run(case, arm, index, args, claude, workspaces, hooks_brain):
     return entry
 
 
-def keep_output(entry, workspace, results_dir, stdout, stderr):
-    """Raw stdout and stderr next to the workspace, after the created-file snapshot."""
+def keep_output(entry, run_name, results_dir, stdout, stderr):
+    """Raw stdout and stderr into the suite's results tree, after the created-file snapshot."""
     def text(value):
         if value is None:
             return ""
         return value.decode(errors="replace") if isinstance(value, bytes) else str(value)
+    run_dir = Path(results_dir) / "runs" / run_name
+    run_dir.mkdir(parents=True, exist_ok=True)
     for key, name, value in (("transcript", "transcript.jsonl", stdout), ("stderr", "stderr.txt", stderr)):
-        path = workspace / name
+        path = run_dir / name
         path.write_text(text(value))
         entry[key] = str(path.relative_to(results_dir))
 
@@ -488,13 +496,15 @@ def run_suite(cases, args):
         if files:
             brain.main(["--project", REPO.name, "stamp", suite, *files])
     results_dir = Path(args.evals_dir) / "results" / suite
-    workspaces = results_dir / "workspaces"
-    workspaces.mkdir(parents=True, exist_ok=True)
+    results_dir.mkdir(parents=True, exist_ok=True)
+    args.results_dir = results_dir
+    workspaces = Path(tempfile.mkdtemp(prefix=f"gentic-evals-{suite}-")) / "workspaces"
+    workspaces.mkdir()
     hooks_brain = results_dir / "hooks-brain.sqlite"
     claude = shutil.which("claude")
     report = {"suite": suite, "claude_version": claude_version(claude),
               "model": args.model or DEFAULT_MODEL, "install_in_sync": not args.skip_install_check,
-              "warnings": [], "cases": [], "totals": {}}
+              "workspaces": str(workspaces), "warnings": [], "cases": [], "totals": {}}
     total_cost = 0.0
     skipped = 0
     for case in cases:

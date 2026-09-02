@@ -196,6 +196,23 @@ class Invocation(EvalsCase):
         self.assertIn("opus", self.records()[-1]["argv"])
 
 
+class Isolation(EvalsCase):
+    def test_workspaces_live_outside_the_repository(self):
+        """A workspace inside this repo inherits its project root — and with it `.claude/agents/`
+        — under `--setting-sources project`, so the without arm silently runs the real agents."""
+        self.case("one")
+        self.run_runner("--arm", "without")
+        record = self.records()[-1]
+        self.assertFalse(Path(record["cwd"]).resolve().is_relative_to(REPO.resolve()),
+                         f"workspace {record['cwd']} is inside the repository")
+        self.assertFalse(Path(record["cwd"]).resolve().is_relative_to(self.evals.resolve()))
+        result = self.result_json()
+        entry = result["cases"][0]["arms"]["without"][0]
+        suite_dir = self.evals / "results" / result["suite"]
+        self.assertTrue((suite_dir / entry["transcript"]).is_file(), "transcript not copied into results")
+        self.assertTrue((suite_dir / entry["stderr"]).is_file(), "stderr not copied into results")
+
+
 class Graders(EvalsCase):
     def test_graders_score_a_replayed_transcript(self):
         self.case("one", graders={

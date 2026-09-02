@@ -176,7 +176,10 @@ Scores land in two brain tables, `eval_runs` and `eval_graders`, next to the sha
 the installed skills and agents that produced them — so a change to a skill can be compared
 before and after. A `with` case below 1.0 is a finding about the workflow and becomes a brain
 `lesson`; the case is never loosened to pass. Results also go to `evals/results/<suite>/`
-(git-ignored) for humans: every run's workspace, its raw `transcript.jsonl` and `stderr.txt`.
+(git-ignored) for humans: every run's raw `transcript.jsonl` and `stderr.txt` under `runs/`.
+Workspaces themselves live under the system temp directory, never inside this repository — a
+workspace inside the checkout would inherit its project root, and with it this repo's agents
+and skills, handing the "without" arm the very things it must lack.
 
 Three fidelity rules, each learned from the first live suite. A session that runs out of turns
 is **exhausted**, not failed: the CLI reports `error_max_turns` with no final message, so the

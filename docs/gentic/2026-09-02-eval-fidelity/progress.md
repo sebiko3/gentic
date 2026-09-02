@@ -1,6 +1,6 @@
 # Run: eval-fidelity
 Goal: Make the fitness function faithful — keep every transcript, score a max-turns exhaustion on what the session produced instead of zeroing it, rewrite the agent graders to assert what each agent definition adds, run agent cases three times, and give workflow cases a turn budget that lets the five phases finish.
-Iteration budget: 13 remaining (rungs spend it; task sizes never do)
+Iteration budget: 10 remaining (3 spent: rung 3 on F10) (rungs spend it; task sizes never do)
 
 ## Phases
 - [x] 1 Scout
@@ -23,8 +23,14 @@ Sizes are planning estimates only; they never spend the iteration budget. Order 
 ## Iteration log
 | # | DoD item | Rung | Points | Result |
 |---|----------|------|--------|--------|
+| 1 | F10 shape graders discriminate (suite 20260902-162750) | 3 | 3 | FAILED: `closing-count` 3/3 and `five-scans` 3/3 in the without arm. Root cause from the transcripts: `init.agents` in the without arm lists `dod-auditor, masterprompt-critic, task-executor, code-reviewer` — the workspace has no `.git`, so the project root resolves to this repo and `--setting-sources project` loads `.claude/agents/`. Redesign within the spec: workspaces move outside any repository; transcripts and stderr are copied into `evals/results/<suite>/`. Then the suite is re-run. |
 
 ## Notes / handoff
 - Child run R3 of the epic `2026-09-02-self-improving-gentic`, re-scoped from "adjective compiler
   and retro" to eval fidelity by R2's three suite-caught lessons (brain #3, #4, #5). The adjective
   compiler and retro move to a later run. Brain consulted first: 5 lessons, 2 notes recalled.
+- Rung 3 (F10): `tests/test_evals.py::test_workspaces_live_outside_the_repository` — RED
+  `AssertionError: True is not false` (workspace under the evals dir) → GREEN after workspaces
+  moved to `tempfile.mkdtemp(prefix="gentic-evals-<suite>-")` and transcripts copied to
+  `evals/results/<suite>/runs/<case>-<arm>-<n>/`. The masterprompt's Context still names the old
+  workspace path; recorded here rather than edited.
