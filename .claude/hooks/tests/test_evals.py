@@ -452,6 +452,7 @@ class FiveCases(unittest.TestCase):
                     self.assertIn(grader.type, ("regex", "file_exists", "tool_used"))
                 if name == "csv-export-probe":
                     self.assertEqual(case.max_turns, 89)
+                    self.assertEqual(case.timeout_seconds, 1597, "89 turns need more than the 900 s default")
                     self.assertEqual(case.runs, 1)
                     self.assertEqual(case.allowed_tools, ["Read", "Glob", "Grep", "Write", "Edit", "Bash"])
                 else:
