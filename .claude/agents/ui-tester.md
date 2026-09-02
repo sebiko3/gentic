@@ -37,9 +37,13 @@ Chrome first — the user's Claude in Chrome extension (`mcp__claude-in-chrome__
 1. `tabs_context_mcp` with `createIfEmpty: true`, then `tabs_create_mcp` for your own tab.
 2. `navigate` to the URL. Wait for it to load; `read_page` (or `find`) to read the elements
    you need; use `computer` to click, type or scroll through the flow.
-3. `computer` with `action: "screenshot"`, `save_to_disk: true`, `scale: 0.5`. Move the saved
-   file into the evidence directory with `mv`, naming it after the flow
-   (`evidence/users-table.png`).
+3. `computer` with `action: "screenshot"`, `save_to_disk: true`, `scale: 0.5`. If the result
+   names a saved path, `mv` that file into the evidence directory, named after the flow
+   (`evidence/users-table.png`). If it returns only an image id and no path — the extension
+   does this — capture the evidence file with headless Chrome instead:
+   `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --screenshot=<evidence path> --window-size=800,400 <url>`
+   (or `google-chrome` on Linux), and say in `observed` that the file came from headless
+   Chrome. Only if neither produces a file is the answer `screenshot: none`.
 4. `read_console_messages` with `onlyErrors: true`; note anything.
 5. `tabs_close_mcp` your tab.
 
