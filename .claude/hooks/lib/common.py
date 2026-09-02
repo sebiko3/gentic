@@ -39,6 +39,37 @@ def _fresh_turn(turn, prompt_id=None, session=None):
     }
 
 
+import contextlib
+import fcntl
+
+
+@contextlib.contextmanager
+def session_lock(session_id):
+    """Serialise read-modify-write of one session's state across concurrent hook processes.
+
+    Five subagents dispatched in one message start five PreToolUse processes at once; without
+    this, each would read 0 and write 1. Failures to lock fall through unlocked — a hook must
+    never break a session over a lock file.
+    """
+    path = _state_file(session_id).with_suffix(".lock")
+    handle = None
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        handle = open(path, "w")
+        fcntl.flock(handle, fcntl.LOCK_EX)
+    except Exception:
+        handle = None
+    try:
+        yield
+    finally:
+        if handle is not None:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_UN)
+                handle.close()
+            except Exception:
+                pass
+
+
 def begin_turn(payload):
     """Open a new user turn, discarding the previous turn's ledger.
 
@@ -53,6 +84,9 @@ def begin_turn(payload):
         payload.get("prompt_id"),
         previous.get("session"),
     )
+    # A new prompt has no foreground subagents in flight; a leaked count must not wedge a session.
+    if "agents_in_flight" in state["session"]:
+        state["session"]["agents_in_flight"] = 0
     save_state(session_id, state)
     return state
 

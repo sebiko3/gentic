@@ -88,6 +88,18 @@ def main():
         if subagent in REVIEW_AGENTS:
             state.setdefault("session", {})["reviewed"] = True
             changed = True
+        # A subagent returned: free its slot in the concurrency valve (floor 0 — background
+        # spawns were never counted). Locked, like the increment.
+        session_id = payload.get("session_id")
+        if session_id:
+            with common.session_lock(session_id):
+                fresh = common.load_state(session_id)
+                fresh_session = fresh.setdefault("session", {})
+                fresh_session["agents_in_flight"] = max(0, int(fresh_session.get("agents_in_flight") or 0) - 1)
+                common.save_state(session_id, fresh)
+            state = common.load_turn_state(payload)
+            if subagent in REVIEW_AGENTS:
+                state.setdefault("session", {})["reviewed"] = True
 
     elif tool == "Bash":
         command = str(tool_input.get("command") or "")

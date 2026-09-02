@@ -13,9 +13,9 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 | # | Task | Size | Depends on | Test | RED | Status |
 |---|------|------|------------|------|-----|--------|
 | 1 | Helper `authorized` mode with the trust file; parser shape (H1, H2) | 3 | — | `tests/test_project_conventions.py::test_authorized_reads_the_section`, `::test_authorized_fails_closed`, `::test_branch_and_commit_still_need_a_slug` | `AssertionError: 2 != 0 : authorized push`; `AssertionError: 2 != 1 : untrusted must be a no` (the slug test passed on arrival: it pins existing behaviour) | done |
-| 2 | Session lock, valve in both hooks, reset per prompt (H3) | 3 | — | `tests/test_guard_and_session.py::test_concurrency_valve_denies_a_sixth_agent`, `::test_valve_counts_parallel_spawns`, `::test_valve_resets_on_a_new_prompt` | | pending |
-| 3 | Installer block, live settings, harness matcher assertion (H5) | 2 | 2 | `tests/test_install.py::test_settings_block_matcher_covers_subagents` | | pending |
-| 4 | Wording in eight sites + structure tests (H4) | 3 | 1 | `tests/test_structure.py::StandingAuthorizations` (8) | | pending |
+| 2 | Session lock, valve in both hooks, reset per prompt (H3) | 3 | — | `tests/test_guard_and_session.py::test_concurrency_valve_denies_a_sixth_agent`, `::test_valve_counts_parallel_spawns`, `::test_valve_resets_on_a_new_prompt` | `AssertionError: None != 'deny' : sixth spawn was not denied`; `AssertionError: 0 != 5 : parallel spawns lost updates` (the reset test passed on arrival: nothing was counted yet — it pins the boundary) | done |
+| 3 | Installer block, live settings, harness matcher assertion (H5) | 2 | 2 | `tests/test_install.py::test_settings_block_matcher_covers_subagents` | `AssertionError: 'Task|Agent' not found in '    "PreToolUse":      [{"matcher": "Bash|Read|Edit|Write|MultiEdit|NotebookEdit|NotebookRead",'` | done |
+| 4 | Wording in eight sites + structure tests (H4) | 3 | 1 | `tests/test_structure.py::StandingAuthorizations` (8) | eight failures, e.g. `AssertionError: '## gentic authorizations' not found in '# gentic routing…'`, `'authorized open-pr' not found in …`, `'trusted-projects' not found in …` | done |
 | 5 | Harness, install, regression run, repo state (H6, H7) | 2 | 1-4 | n/a — live observations | | pending |
 
 Sizes are planning estimates only; they never spend the iteration budget. Order 1–5.

@@ -7,11 +7,15 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
 
 HOOKS = Path(__file__).resolve().parent.parent
 GUARD = HOOKS / "pre_tool_use.py"
 SESSION = HOOKS / "session_start.py"
+PRE = HOOKS / "pre_tool_use.py"
+POST = HOOKS / "post_tool_use.py"
+PROMPT = HOOKS / "user_prompt_submit.py"
 
 
 def run(script, payload, state_dir=None):
@@ -111,6 +115,61 @@ class Guard(unittest.TestCase):
         })
         self.assertEqual(code, 0)
         self.assertEqual(out.strip(), "")
+
+
+class ConcurrencyValve(unittest.TestCase):
+    """At most five foreground subagents in flight per session; a cap, serialised with a lock,
+    reset at every user prompt, blind to background spawns by design."""
+
+    def setUp(self):
+        self.state = tempfile.mkdtemp()
+        self.session = f"s-{uuid.uuid4().hex[:8]}"
+
+    def spawn_payload(self, background=False):
+        payload = {"hook_event_name": "PreToolUse", "tool_name": "Task",
+                   "tool_input": {"subagent_type": "general-purpose", "prompt": "x"},
+                   "session_id": self.session}
+        if background:
+            payload["tool_input"]["run_in_background"] = True
+        return payload
+
+    def decision(self, stdout):
+        try:
+            return json.loads(stdout)["hookSpecificOutput"]["permissionDecision"]
+        except Exception:
+            return None
+
+    def count(self):
+        path = Path(self.state) / f"{self.session}.json"
+        return json.loads(path.read_text()).get("session", {}).get("agents_in_flight", 0) if path.exists() else 0
+
+    def test_concurrency_valve_denies_a_sixth_agent(self):
+        for _ in range(5):
+            code, out, _ = run(PRE, self.spawn_payload(), self.state)
+            self.assertIsNone(self.decision(out))
+        code, out, _ = run(PRE, self.spawn_payload(), self.state)
+        self.assertEqual(self.decision(out), "deny", "sixth spawn was not denied")
+        self.assertIn("in flight", out)
+        run(POST, {"hook_event_name": "PostToolUse", "tool_name": "Task",
+                   "tool_input": {"subagent_type": "general-purpose"}, "session_id": self.session}, self.state)
+        code, out, _ = run(PRE, self.spawn_payload(), self.state)
+        self.assertIsNone(self.decision(out), "a returned agent did not free a slot")
+        code, out, _ = run(PRE, self.spawn_payload(background=True), self.state)
+        self.assertIsNone(self.decision(out), "a background spawn must never be denied")
+
+    def test_valve_counts_parallel_spawns(self):
+        env = dict(os.environ, CLAUDE_HOOK_STATE_DIR=self.state)
+        procs = [subprocess.Popen([sys.executable, str(PRE)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                  stderr=subprocess.PIPE, text=True, env=env) for _ in range(5)]
+        for proc in procs:
+            proc.communicate(json.dumps(self.spawn_payload()), timeout=30)
+        self.assertEqual(self.count(), 5, "parallel spawns lost updates")
+
+    def test_valve_resets_on_a_new_prompt(self):
+        for _ in range(3):
+            run(PRE, self.spawn_payload(), self.state)
+        run(PROMPT, {"hook_event_name": "UserPromptSubmit", "prompt": "next", "session_id": self.session}, self.state)
+        self.assertEqual(self.count(), 0)
 
 
 class SessionStart(unittest.TestCase):
