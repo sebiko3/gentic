@@ -24,6 +24,7 @@ Sizes are planning estimates only; they never spend the iteration budget. Order 
 |---|----------|------|--------|--------|
 | 1 | U7 screenshot method | 1 | 1 | The extension's `save_to_disk` writes no file (probed from the inlined agent and from the main thread: "Successfully captured screenshot … ID: ss_…", no path). The agent improvised headless Chrome and disclosed it; the method now codifies that fallback. U7's pass condition itself was met (see below). |
 | 2 | U8 regression gate (suite 20260902-215633) | 1 | 1 | FAILED: `with 3/4 (0.75) exhausted`, 56 turns, 2.28 USD, `pii-surfaced` failed. Transcript: the Scout variant did **not** fire (0 browser/server tool uses); 64 tool uses went Scout→Interview→Masterprompt→Execute (23 edits) and the limit hit mid-Execute, so no final message existed for the last-message grader. Root cause: the 55-turn budget's zero headroom (brain note after R4). Fix: `csv-export-probe` `max_turns: 89`, per-run cap 5 USD (Fibonacci), expectations updated first (RED `55 != 89`, `'3' != '5'`); README updated. Second and last U8 invocation follows. |
+| 0 | U1–U7 | — | 0 | PROVEN by `dod-auditor`: `-k ui_grammar` 1 OK · `-k ui_tdd -k ui_scout` 2 OK · `-k ui_iterate` 1 OK · `-k ui_agent -k expected_agents -k states_what_it_returns` 3 OK · `-k ui_readme` 1 OK · `run.sh` all checks passed, `test_structure (Ran 47 tests)` · U7 artifact: report verified, PNG 800×400 27,996 B viewed, curl count 4, install in sync. U8: UNVERIFIABLE — two invocations spent. |
 | 3 | U8 regression gate, second invocation (suite 20260902-220926) | 2 | 2 | FAILED: `with 0/4 (0.00) $0.00`, `is_error`, detail `timeout after 900s`. The session was killed by the runner's default `timeout_seconds` at exactly 15 minutes after 86 tool uses and two agent dispatches — a harness limit, not a workflow failure. Two failed fixes at rung 1 make rung 2 mandatory: the case now sets `timeout_seconds: 1597`, pinned by the five-cases test (RED `900 != 1597`). **U8's two-invocation cap is spent; a third run needs the user's word** (spec constraint, rung-5 territory) — handed off. |
 
 ## Notes / handoff
@@ -56,3 +57,11 @@ final message existed. Suite `20260902-220926`, after 89 turns / 5 USD: `csv-exp
 `timeout after 900s` — killed at 15:00 with 86 tool uses (28 edits, 2 agent dispatches). The workflow itself
 did not regress in either run; the harness limits did the cutting. Fixes: 89 turns, 5 USD, `timeout_seconds: 1597`.
 A third invocation is outside the spec's cap and awaits the user.
+
+## Handoff (2026-09-02, awaiting the user)
+U1–U7 proven; U8 has no passing observation. Both permitted invocations failed on harness limits
+that this run then fixed (89 turns, 5 USD, 1597 s), so the workflow itself has not been shown to
+regress or to pass under the new wording. A third invocation (≈ 3–5 USD, ≈ 20–25 min) exceeds the
+spec's cap and is the user's call: authorise it, or accept suite `20260902-215633` (3/4, cut off
+mid-Execute with the brief, decisions and masterprompt written) as the evidence and close with U8
+recorded as not proven. `ui-tester` now resolves by name in fresh sessions.
