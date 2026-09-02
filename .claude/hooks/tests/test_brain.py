@@ -205,7 +205,7 @@ class Lessons(BrainCase):
         self.assertIn("suite: 1", stats)
         self.assertIn("points: 2", stats)
 
-    def test_lessons_default_to_current_project(self):
+    def test_scoping_lessons_default_to_current_project(self):
         self.ok("lesson", "--item", "alpha-item", "--rung", "1", "--points", "1",
                 "--caught-by", "live", "--cause", "x")
         self.ok("lesson", "--item", "beta-item", "--rung", "2", "--points", "2",
