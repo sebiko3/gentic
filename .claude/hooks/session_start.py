@@ -2,7 +2,8 @@
 """SessionStart — prune stale state and surface unfinished spec-driven work.
 
 A gentic run outlives the session that started it. Without this, resuming means the user
-has to remember the run exists. Silent when there is nothing outstanding.
+has to remember the run exists. The brain's memory of this project is surfaced the same way.
+Silent when there is nothing outstanding and nothing remembered.
 """
 
 import sys
@@ -10,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib import common  # noqa: E402
+from lib import brain, common  # noqa: E402
 
 PHASES = ("Scout", "Interview", "Masterprompt", "Execute", "Iterate")
 
@@ -48,14 +49,23 @@ def main():
     if not root:
         return
 
+    lines = []
     runs = unfinished(root)
-    if not runs:
-        return
+    if runs:
+        lines.append("Unfinished gentic run(s) in this repo:")
+        lines += [f"  • {name} — next phase: {phase}" for name, phase in runs[-3:]]
+        lines.append("Invoke the `gentic` skill to resume; its progress.md carries the state.")
 
-    lines = ["Unfinished gentic run(s) in this repo:"]
-    lines += [f"  • {name} — next phase: {phase}" for name, phase in runs[-3:]]
-    lines.append("Invoke the `gentic` skill to resume; its progress.md carries the state.")
-    common.emit_message("\n".join(lines))
+    known = brain.summary(Path(root).name)
+    if known and any(known):
+        lessons, preferences = known
+        lines.append(
+            f"brain: {lessons} lesson(s) for {Path(root).name}, {preferences} learned preference(s) — "
+            'python3 "$HOME/.claude/hooks/lib/brain.py" recall <words>'
+        )
+
+    if lines:
+        common.emit_message("\n".join(lines))
 
 
 if __name__ == "__main__":

@@ -164,6 +164,27 @@ def record_event(cwd, session, kind, detail, data=None):
         return False
 
 
+def summary(project):
+    """(lessons for `project`, learned preferences) for the session-start notice, or None.
+
+    Read-only and best-effort: a missing brain is None rather than a freshly created file, so
+    merely starting a session never writes to the user's home.
+    """
+    try:
+        if not db_path().exists():
+            return None
+        conn = sqlite3.connect(str(db_path()), timeout=BUSY_TIMEOUT)
+        try:
+            lessons = conn.execute("SELECT COUNT(*) FROM lessons WHERE project = ?", (project,)).fetchone()[0]
+            topics = [t for (t,) in conn.execute("SELECT DISTINCT topic FROM decisions")]
+            preferences = sum(1 for t in topics if learned_preference(conn, t) is not None)
+        finally:
+            conn.close()
+        return lessons, preferences
+    except Exception:
+        return None
+
+
 # --- CLI commands ----------------------------------------------------------------------
 
 def when(ts):
