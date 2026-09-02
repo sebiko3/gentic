@@ -32,6 +32,9 @@ Execute turns the masterprompt into a task plan, then delivers it one verified, 
 
 Never improvise silently. If interactive: a single AskUserQuestion call (a mini-interview — gentic-interview's question-craft rules apply, but one call, not the round system). If autonomous: adopt the most conservative option consistent with the masterprompt, append it to `decisions.md` as `default — unconfirmed`, and continue.
 
+A blocker, a surprise, or a number that was hard to find is worth a `note` in the brain
+(`gentic-brain`) — the next run in this project will `recall` it before scouting.
+
 ## Drift rule
 
 - Reality invalidates the *plan* (wrong task breakdown, wrong estimate): update the task table and keep going. Note it in `progress.md`.

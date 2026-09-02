@@ -31,6 +31,8 @@ convention via `project_conventions.py`; never push, never open a PR).
 1. Derive a short kebab-case slug from the request (e.g. `add-user-auth`).
 2. Create the run directory: `docs/gentic/<YYYY-MM-DD>-<slug>/` (today's date).
 3. Write `progress.md` in it from the template below.
+   Open the run in the brain (`gentic-brain`): `python3 "$HOME/.claude/hooks/lib/brain.py" run start <slug> --goal "<goal>"`,
+   then `stamp <slug>` the skill and agent files this run will use.
 4. Invoke `gentic-scout` with the Skill tool. Follow each phase skill exactly.
 5. Between phases: verify the gate from the table above, tick the phase box in `progress.md`, commit the run directory (subject from `project_conventions.py commit`: `gentic(<slug>): <phase> gate` in an adopted repo, `<phase> gate` elsewhere), then invoke the next phase's skill. During Execute, progress ticks ride inside each task's checkpoint commit instead. After Execute, `gentic-iterate` owns control flow until the run is done or stopped — it may re-enter earlier phases via its escalation ladder.
 

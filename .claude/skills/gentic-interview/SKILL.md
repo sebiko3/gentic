@@ -13,6 +13,10 @@ The Interview converts the brief's open decisions into settled ones, using as fe
 
 ## Choosing questions
 
+Before scoring, ask the brain (`gentic-brain`) `preference <topic>` for each open decision: a
+learned answer is adopted with Source `learned` and never asked. After the user answers, record
+each choice with `decide <topic> <chosen> --source user`, so the next run can learn it.
+
 Score each open decision from the brief: leverage (how much the answer changes the work) × uncertainty (how likely the recommended default is wrong). Ask the top scorers; adopt defaults for the rest silently, recording them with Source `default — unconfirmed`. (Blockers discovered mid-Execute are owned by gentic-execute's blocker rule, not this skill.)
 
 **Automatic top rank, regardless of score: decisions touching other people's data, security, money, or anything irreversible.** These are precisely the calls an agent will otherwise make unilaterally "on its own authority" — they belong to the user.

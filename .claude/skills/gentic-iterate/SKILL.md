@@ -39,6 +39,8 @@ Costs are fibonacci because each rung discards more prior work; the default budg
 - **The initial verification failure is not an attempt; fixes are.** Each fix attempt starts a rung and deducts that rung's points anew from the budget line in `progress.md`, logged: item, rung, points, result.
 - **Same DoD item fails two fix attempts at the same rung → the next rung is mandatory.** No third attempt at a level — and "next" is a floor: the diagnosis may justify jumping higher, never staying. "One more quick try" is the loop this skill exists to break.
 - A mandated rung costing more than the remaining budget = budget exhausted: stop and hand off.
+- Every rung spent is a lesson for the brain (`gentic-brain`):
+  `lesson --item <DoD item> --rung <n> --points <n> --caught-by <suite|live|review|critic|auditor|user> --cause "<root cause>"`.
 - Commit rung work like tasks, with the subject from `project_conventions.py commit` — `gentic(<slug>): rung-<n> <DoD item>` in an adopted repo, `rung-<n> <DoD item>` in any other project.
 - Rungs 5 and 8 are user check-ins. If the session is autonomous, do not silently rewrite the spec — stop and hand off instead. (A rung you stop at instead of starting deducts nothing and gets the same handoff as budget exhaustion.)
 - Budget exhausted → stop. Write an honest handoff in `progress.md` (what passes, what fails, root-cause state, recommended next rung) and report to the user. A stopped run with a clean handoff beats a thrashed one.
@@ -46,6 +48,7 @@ Costs are fibonacci because each rung discards more prior work; the default budg
 ## Final report (all DoD green)
 
 Append the report to `progress.md` (Notes / handoff) and tick phase 5, then report to the user: mission, each DoD item with its evidence, unconfirmed defaults awaiting confirmation, points spent, and anything deliberately not done (non-goals). If superpowers:finishing-a-development-branch is available, invoke it to close out the branch.
+Close the run in the brain: `run finish <slug> --outcome done` (a handoff uses `--outcome stopped`).
 
 ## Red flags — stop and re-read this skill
 

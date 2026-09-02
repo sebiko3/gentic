@@ -53,6 +53,8 @@ The masterprompt compiles everything the run knows into a single spec. Write `ma
 - For an item with nothing executable behind it (documentation, prompts, specs), the contract is a contract test in the project's existing suite: an assertion about the file that fails before the change. `n/a` is reserved for items that change nothing observable, and must carry its reason.
 - **Every vague adjective in the request — "fast", "simple", "robust", "clean" — must become either a measured DoD item (with a number and a command) or an explicit non-goal.** Vague words silently accepted "by construction" are the most common way runs end wrong.
 - Behavior touching other people's data, security, or money gets its own DoD item even if the user never mentioned it.
+- Record every unconfirmed default in the brain (`gentic-brain`) with
+  `decide <topic> <chosen> --source default` — defaults never teach a preference, but they stay visible.
 - If the user never supplied the number behind an adjective (unasked, or an autonomous run), choose a defensible one and flag it `unconfirmed` like any default.
 
 ## Critique pass (mandatory)

@@ -15,7 +15,7 @@ pass() { printf '  ok    %s\n' "$1"; }
 fail() { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; FAILURES=$((FAILURES + 1)); }
 
 section "Unit and contract suites"
-for suite in test_lib test_classifier test_gate test_tdd test_token_efficiency test_guard_and_session test_agentignore test_install test_structure test_review_nudge test_destructive_guard test_project_conventions; do
+for suite in test_lib test_classifier test_gate test_tdd test_token_efficiency test_guard_and_session test_agentignore test_install test_structure test_review_nudge test_destructive_guard test_project_conventions test_brain; do
   if out=$(cd "$HOOKS" && python3 "tests/$suite.py" 2>&1); then
     pass "$suite ($(printf '%s' "$out" | grep -oE 'Ran [0-9]+ tests' | head -1))"
   else
@@ -167,10 +167,10 @@ if grep -qi 'not a security boundary' "$HOOKS/README.md"; then
 else
   fail "README does not state the .agentignore limitation"
 fi
-if [ "$(ls "$HOOKS/../skills"/gentic*/SKILL.md 2>/dev/null | wc -l | tr -d ' ')" = "7" ]; then
-  pass "7 gentic skills present in the repo"
+if [ "$(ls "$HOOKS/../skills"/gentic*/SKILL.md 2>/dev/null | wc -l | tr -d ' ')" = "8" ]; then
+  pass "8 gentic skills present in the repo"
 else
-  fail "expected 7 gentic skills in the repo"
+  fail "expected 8 gentic skills in the repo"
 fi
 
 section "Result"

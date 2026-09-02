@@ -13,6 +13,8 @@ Scout makes the Interview phase worth having: questions asked from ignorance are
 
 ## Method
 
+0. **Ask the brain first** (`gentic-brain`): `recall <words from the request>` and `lessons`.
+   A hit is a Fact, cited as `brain #<id>` — earlier runs in this project already paid for it.
 1. **Shallow first.** Project layout, README, manifest/config files, recent commits. What kind of project is this, what conventions does it already have?
 2. **Deepen only where the request points.** Read the files the task will touch and their tests. Note patterns to imitate, with `file:line` references.
 3. **Time-box.** If ~13 tool calls pass without a new load-bearing fact, stop and write the brief with what you have.

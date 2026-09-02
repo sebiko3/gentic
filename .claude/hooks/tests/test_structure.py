@@ -48,7 +48,7 @@ SUPERPOWERS_REF = re.compile(r"superpowers:([a-z][a-z0-9-]*)")
 SLASH_COMMAND = re.compile(r"(?:^|(?<=[\s`(]))/([a-z][a-z0-9-]{2,})(?![\w/.-])")
 HOOK_PATH = re.compile(r"hooks/([a-z_]+\.py)")
 # Only the phase skills. `gentic-runs` is a directory in the fallback artifact path, not a skill.
-GENTIC_SKILL = re.compile(r"\b(gentic-(?:scout|interview|masterprompt|execute|iterate|tdd))\b")
+GENTIC_SKILL = re.compile(r"\b(gentic-(?:scout|interview|masterprompt|execute|iterate|tdd|brain))\b")
 
 
 def frontmatter(path):
@@ -337,6 +337,35 @@ class TestFirstSpine(unittest.TestCase):
                 body = (REPO / name).read_text(encoding="utf-8")
                 self.assertIn("gentic-tdd", body, f"{name} does not mention gentic-tdd")
                 self.assertRegex(body, r"(?i)\bRED\b", f"{name} does not mention RED evidence")
+
+
+class BrainWiring(unittest.TestCase):
+    """The brain is only memory if the phases actually consult it.
+
+    A `gentic-brain` skill that nothing invokes is the `ROUTING.md` defect again: shipped,
+    installed, invisible. Every phase that has something to remember or recall must name it.
+    """
+
+    PHASES_THAT_REMEMBER = (
+        "gentic", "gentic-scout", "gentic-interview", "gentic-masterprompt",
+        "gentic-execute", "gentic-iterate",
+    )
+
+    def test_brain_skill_is_wired_into_the_phases(self):
+        skill = CLAUDE / "skills" / "gentic-brain" / "SKILL.md"
+        self.assertTrue(skill.is_file(), "skills/gentic-brain/SKILL.md missing")
+        fields = frontmatter(skill)
+        self.assertEqual(fields.get("name"), "gentic-brain")
+        description = fields.get("description", "")
+        self.assertTrue(description.startswith("Use when"), "description is not trigger-style")
+        named = sum(1 for word in ("note", "recall", "decide", "lesson") if word in description)
+        self.assertGreaterEqual(named, 2, "description names fewer than two brain verbs")
+        for name in self.PHASES_THAT_REMEMBER:
+            body = (CLAUDE / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
+            self.assertIn("gentic-brain", body, f"{name} does not mention gentic-brain")
+        self.assertRegex("gentic-brain", GENTIC_SKILL, "GENTIC_SKILL does not cover gentic-brain")
+        run_sh = (CLAUDE / "hooks" / "tests" / "run.sh").read_text(encoding="utf-8")
+        self.assertIn('= "8"', run_sh, "run.sh does not expect 8 gentic skills")
 
 
 class NoOrphanedSkillFiles(unittest.TestCase):

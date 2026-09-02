@@ -57,6 +57,13 @@ these limits, which exist because `~/.claude/CLAUDE.md` otherwise forbids unrequ
 - **Never push and never open a PR as part of a run.** That is `/ship`'s job, and `/ship` only
   runs when the user types it.
 
+## The brain
+
+gentic's memory is one SQLite file, `~/.claude/gentic/brain.sqlite` (`GENTIC_BRAIN` overrides
+it). Hooks append events to it on their own; phases read and write it through
+`python3 "$HOME/.claude/hooks/lib/brain.py"` as the `gentic-brain` skill describes. Nothing in
+a run depends on it existing.
+
 ## Composition
 
 Where a phase skill marks a composition point, invoke the superpowers skill named there
