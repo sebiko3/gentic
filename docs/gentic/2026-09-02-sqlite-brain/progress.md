@@ -54,7 +54,7 @@ fixed at rung 1 (iteration log #2, #3). Every task went RED first; evidence in t
 
 **The brain's first contents, written by this run (dogfood):** `run start/finish sqlite-brain`,
 stamps of eight skills and four agents, two `user` decisions and two `default` decisions, two
-lessons (`caught_by auditor`), two notes, and the events the hooks recorded during the session.
+lessons (`caught_by auditor`), two notes. Events: 0 so far — the live hooks gained the brain only at `install.sh` time, and every test in this session ran through `python3 tests/…`, which the verification regex does not recognise; the first `pytest`/`npm test`-class command in a new session will write the first row.
 
 **Unconfirmed defaults** (all `user — delegated` under blanket trust; listed so they can be
 reversed): machine-wide location with env override; project key = git root basename (same-named
