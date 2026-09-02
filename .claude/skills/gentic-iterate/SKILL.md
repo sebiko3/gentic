@@ -20,6 +20,9 @@ Iterate proves the run against its Definition of Done and, when items fail, choo
 
 ## On failure: diagnose, then pick a rung
 
+Before any rung, if `docs/gentic/<run>/STOP` exists, write the handoff into `progress.md` and
+stop — the file was put there from outside the run.
+
 Direct rung-5 entry: when gentic-execute's drift rule sends the run here mid-Execute, skip Verification and start at rung 5.
 
 Root cause first — if superpowers:systematic-debugging is available, you MUST invoke it before choosing a rung; otherwise the inline rule holds: reproduce, isolate, and name the root cause before any fix. Then take the **lowest rung sufficient for the root cause**:
@@ -47,7 +50,14 @@ Costs are fibonacci because each rung discards more prior work; the default budg
 
 ## Final report (all DoD green)
 
-Append the report to `progress.md` (Notes / handoff) and tick phase 5, then report to the user: mission, each DoD item with its evidence, unconfirmed defaults awaiting confirmation, points spent, and anything deliberately not done (non-goals). If superpowers:finishing-a-development-branch is available, invoke it to close out the branch.
+Append the report to `progress.md` (Notes / handoff) and tick phase 5, then report to the user: mission, each DoD item with its evidence, unconfirmed defaults awaiting confirmation, points spent, and anything deliberately not done (non-goals). Then commit the final-report edit to `progress.md` as the last checkpoint commit. Ask the
+project: if `python3 "$HOME/.claude/hooks/lib/project_conventions.py" authorized push` and
+`… authorized open-pr` both print `yes`, follow `$HOME/.claude/commands/ship.md` steps 1–4 and 6
+(preconditions, branch guard, verify, review, push, PR); skip its commit step, skip
+`dod-auditor` in its review because it just ran, record any review finding in the PR body
+rather than as a rung, and put the PR URL in the report. If either prints `no`, the report says
+what `/ship` would do and stops there; then invoke superpowers:finishing-a-development-branch if it is available,
+to close out the branch.
 Close the run in the brain: `run finish <slug> --outcome done` (a handoff uses `--outcome stopped`).
 
 ## Red flags — stop and re-read this skill

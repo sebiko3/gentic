@@ -54,8 +54,14 @@ these limits, which exist because `~/.claude/CLAUDE.md` otherwise forbids unrequ
 
   Adopted repos get `gentic(<slug>): <task summary>`; everywhere else the summary is used
   plain, with no gentic wrapper in another project's history.
-- **Never push and never open a PR as part of a run.** That is `/ship`'s job, and `/ship` only
-  runs when the user types it.
+- **Never push and never open a PR as part of a run unless the project grants it and the
+  machine trusts the project.** A project grants it in its root `CLAUDE.md` under
+  `## gentic authorizations` (`push`, `open-pr`; `merge-on-green`, `deploy-preview`,
+  `use-workflow-tool`, `spawn-teams` are reserved), and the user trusts the project by adding
+  its git-root path to `~/.claude/gentic/trusted-projects`. Ask the script, never memory:
+  `python3 "$HOME/.claude/hooks/lib/project_conventions.py" authorized push` prints `yes` or
+  `no`. Without `yes` for both `push` and `open-pr`, `/ship`, typed by the user, remains the
+  only path.
 
 ## The brain
 

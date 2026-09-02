@@ -397,6 +397,47 @@ class AutonomousRuns(unittest.TestCase):
         self.assertIn("don't stop to flag", body)
 
 
+class StandingAuthorizations(unittest.TestCase):
+    """A grant in CLAUDE.md plus a machine-side trust file let a run push and open a PR; a STOP
+    file halts it; a valve caps fan-out. Each rule lives in wording that must stay in place."""
+
+    def lowered(self, rel):
+        return (REPO / rel).read_text(encoding="utf-8").lower()
+
+    def test_routing_names_the_grant_and_the_helper(self):
+        body = self.lowered(".claude/skills/gentic/ROUTING.md")
+        self.assertIn("## gentic authorizations", body)
+        self.assertIn("authorized push", body)
+
+    def test_iterate_consumes_the_grant_and_checks_stop(self):
+        body = self.lowered(".claude/skills/gentic-iterate/SKILL.md")
+        self.assertIn("authorized open-pr", body)
+        self.assertIn("ship.md", body)
+        self.assertIn("docs/gentic/<run>/stop", body)
+
+    def test_ship_admits_the_second_caller(self):
+        self.assertIn("trusted-projects", self.lowered(".claude/commands/ship.md"))
+
+    def test_execute_checks_stop_before_each_task(self):
+        self.assertIn("check for `stop`", self.lowered(".claude/skills/gentic-execute/SKILL.md"))
+
+    def test_orchestrator_has_a_stop_request(self):
+        self.assertIn("## stop request", self.lowered(".claude/skills/gentic/SKILL.md"))
+
+    def test_this_repo_declares_its_authorizations(self):
+        self.assertIn("## gentic authorizations", self.lowered("CLAUDE.md"))
+
+    def test_readme_documents_authorizations_and_trust(self):
+        body = self.lowered("README.md")
+        self.assertIn("## standing authorizations", body)
+        self.assertIn("trusted-projects", body)
+
+    def test_hooks_readme_documents_the_valve(self):
+        body = self.lowered(".claude/hooks/README.md")
+        self.assertIn("in flight", body)
+        self.assertIn("run_in_background", body)
+
+
 class NoOrphanedSkillFiles(unittest.TestCase):
     """A file shipped inside a skill that its SKILL.md never mentions is invisible.
 

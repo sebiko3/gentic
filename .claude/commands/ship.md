@@ -5,7 +5,10 @@ description: Verify, review, commit, push and open a PR for the current work —
 # /ship
 
 This command is the **only** place in this setup where git and GitHub work happens without being
-asked step by step. Nothing here fires on its own; the user typing `/ship` is the authorisation.
+asked step by step. Nothing here fires on its own; the user typing `/ship` is the authorisation
+— or a gentic run in a project that grants `push` and `open-pr` under `## gentic authorizations`
+*and* is listed in `~/.claude/gentic/trusted-projects`, which the run checks with
+`project_conventions.py authorized` before following these steps at the end of Iterate.
 Everything below then runs unattended until it either opens a PR or stops with a clear reason.
 
 Arguments (optional): `$ARGUMENTS` may carry a PR title or a short description of the change.

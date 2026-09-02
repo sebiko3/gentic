@@ -47,6 +47,14 @@ convention via `project_conventions.py`; never push, never open a PR).
 
 Read all `docs/gentic/*/progress.md`, report each run's goal, current phase, tasks done/total, budget remaining, and any handoff note. No other action.
 
+## Stop request
+
+`/gentic stop <slug> [reason]` — handled by this skill like a status request, no command file —
+writes `docs/gentic/<run>/STOP` containing the reason (default `stopped by user`).
+`gentic-execute` checks for it before every task and `gentic-iterate` before every rung; a
+stopped run writes its handoff and ends the turn. Status lists such a run as `stopped`. The
+file is untracked and never committed; nothing deletes it but the user. Delete it to resume.
+
 ## progress.md template
 
 ```markdown

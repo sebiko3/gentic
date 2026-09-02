@@ -192,6 +192,32 @@ graders assert the shape each agent definition promises — the auditor's `UNVER
 and closing count, the critic's five named scans, the executor's `status:` line, the reviewer's
 `confidence <n>` and `Not reported` — rather than vocabulary a built-in agent also produces.
 
+## Standing authorizations
+
+A run never pushes and never opens a PR unless you have said so — once, durably, and in two
+places, because a clone must never be able to grant itself. In the project's root `CLAUDE.md`:
+
+```markdown
+## gentic authorizations
+- push
+- open-pr — CI is required on this repo, so a PR is safe to open
+```
+
+and on the machine, one git-root path per line in `~/.claude/gentic/trusted-projects`, a file
+only you write. The helper answers from both, and fails closed on anything missing:
+
+```bash
+python3 ~/.claude/hooks/lib/project_conventions.py authorized push      # yes / no, exit 0 / 1
+python3 ~/.claude/hooks/lib/project_conventions.py authorized --list    # granted and trusted words
+```
+
+Today only `push` and `open-pr` are consumed: a run whose project grants both ends its Iterate
+phase by following `/ship`'s own steps and reporting the PR URL. `merge-on-green`,
+`deploy-preview`, `use-workflow-tool` and `spawn-teams` are reserved words for the release lane
+and the orchestrator mesh. To halt a run from outside, create `docs/gentic/<run>/STOP` (or say
+`/gentic stop <slug>`): the next task or rung writes a handoff and ends; delete the file to
+resume. A hook also refuses a sixth concurrent foreground subagent per session.
+
 ## Install
 
 ```bash
