@@ -7,7 +7,7 @@ Iteration budget: 11 remaining (2 spent: two rung-1 fixes after the audit) (rung
 - [x] 2 Interview (user delegated all decisions; recorded as `user — delegated`)
 - [x] 3 Masterprompt (critic: 6 blocking / 15 serious / 8 minor, all fixed inline; second cold read clean)
 - [x] 4 Execute (6 tasks, 6 checkpoint commits, every RED cell filled)
-- [ ] 5 Iterate
+- [x] 5 Iterate (13/13 DoD proven after two rung-1 fixes; 11 of 13 points remain)
 
 ## Tasks
 | # | Task | Size | Depends on | Test | RED | Status |
@@ -32,3 +32,45 @@ Sizes are planning estimates only; they never spend the iteration budget. Order:
 - Child run R1 of the epic `2026-09-02-self-improving-gentic`; its brief and decisions apply.
 - Stale line references in `masterprompt.md` Context (isolation grep cited at run.sh 87-96, skill
   count at 147; live file: 110-119 and 152). Noted, not a DoD item; the same drift produced D9.
+
+## Final report
+
+**Mission.** gentic has a persistent brain: `~/.claude/gentic/brain.sqlite` (`GENTIC_BRAIN`
+overrides), stdlib `sqlite3`, WAL, FTS5 with a `LIKE` fallback. The hooks append `red`,
+`verification`, `gate_block` and the three nudge kinds on their own, best-effort and invisible
+on failure; the phase skills note, recall, decide, learn preferences, record lessons, stamp
+skill versions and open/close runs through `python3 ~/.claude/hooks/lib/brain.py`; `sql` is
+unrestricted with a `.bak` before destructive statements. Installed live via `./install.sh`
+(17 files; `--check` in sync).
+
+**13 of 13 DoD items proven**, all re-run fresh at the final gate after the rung fixes:
+`test_brain` 13 OK · every `-k` verify command OK (recall 2, sql 2, preference 1, lesson 2,
+run_lifecycle 1, hooks_write 1, invisible 1, session_start 1, scoping 1, docs 1) · `test_gate`
+19 OK (unchanged) · `test_structure` 29 OK · `test_install` 16 OK · `run.sh` exit 0, all checks
+passed, medians 23.4 / 25.0 / 30.4 ms · `git ls-files -- .claude | grep -c brain` → 3.
+
+**Budget: 11 of 13 remaining.** The `dod-auditor` failed two items on its first pass, both
+fixed at rung 1 (iteration log #2, #3). Every task went RED first; evidence in the task table.
+
+**The brain's first contents, written by this run (dogfood):** `run start/finish sqlite-brain`,
+stamps of eight skills and four agents, two `user` decisions and two `default` decisions, two
+lessons (`caught_by auditor`), two notes, and the events the hooks recorded during the session.
+
+**Unconfirmed defaults** (all `user — delegated` under blanket trust; listed so they can be
+reversed): machine-wide location with env override; project key = git root basename (same-named
+repos share memory); preferences learned across projects, latest user answer wins once chosen
+twice, defaults never teach; hooks write only from `post_tool_use` and `stop`; 34 ms lock timeout;
+free SQL with a single-level `.bak`; no schema migrations; no retention policy; an eighth skill
+rather than folding the brain into `gentic`.
+
+**Deviation recorded, not hidden.** D8's text names the notice literal
+`python3 "$HOME/.claude/hooks/lib/brain.py" recall <words>`; the shipped notice prints
+`python3 ~/.claude/hooks/lib/brain.py recall <words>` because the harness forbids the quoted
+form inside a hook. The contract test passes; the DoD text was not edited.
+
+**Deliberately not done** (non-goals held): no consumer of `events`, no dashboard, no evals,
+no gardener, no retro.md, no adjective catalogue, no `zcontext` migration, no MCP server, no
+embeddings, no import of old run artifacts, no PATH alias, no CI, no push, no PR.
+
+**Branch.** `gentic/self-improving-gentic` holds the epic gates and this run's eight commits;
+kept as-is for `/ship` (never pushed by a run).

@@ -12,7 +12,7 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 ## Tasks
 | # | Task | Size | Depends on | Test | RED | Status |
 |---|------|------|------------|------|-----|--------|
-| R1 | child run `2026-09-02-sqlite-brain` | 8 | — | its own DoD | see child | in progress |
+| R1 | child run `2026-09-02-sqlite-brain` | 8 | — | its own DoD | see child (13/13 proven, 2 rung-1 fixes) | done |
 | R2 | child run `gentic-evals` | 8 | R1 | its own DoD | — | pending |
 | R3 | child run `adjective-compiler-and-retro` | 5 | R1 | its own DoD | — | pending |
 | R4 | child run `standing-authorizations` | 5 | — | its own DoD | — | pending |
@@ -37,3 +37,4 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 - 2026-09-02: User delegated all decisions and chose an SQLite brain. The brain is now R1; the
   roadmap grew to nine runs (the retro/adjective work split out of the old R2 because it depends
   on the brain). Child run `2026-09-02-sqlite-brain` started in this session.
+- 2026-09-02: R1 `sqlite-brain` complete on this branch. Next: R2 `gentic-evals` — its scout should `recall` and `lessons` first; the brain now has content.

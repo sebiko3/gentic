@@ -26,7 +26,7 @@ written. verify: `grep -c '^- \[x\]' docs/gentic/<date>-<slug>/progress.md` prin
 contract: n/a for the index — the observable behaviour is specified and tested inside each
 child run's own masterprompt; the index has nothing executable of its own.
 
-- [ ] R1 `sqlite-brain` (brief items 3, 4, 5 substrate; user's decision)
+- [x] R1 `sqlite-brain` (brief items 3, 4, 5 substrate; user's decision) — `grep -c '^- \[x\]' docs/gentic/2026-09-02-sqlite-brain/progress.md` → 5
 - [ ] R2 `gentic-evals` (items 1, 2, verification regex fix from 11)
 - [ ] R3 `adjective-compiler-and-retro` (items 7, `retro.md`, brain-backed)
 - [ ] R4 `standing-authorizations` (items 14, 15, 16)
