@@ -137,11 +137,11 @@ else
 
   MATCHER=$(jq -r '.hooks.PreToolUse[0].matcher' "$SETTINGS" 2>/dev/null)
   MISSING=""
-  for tool in Bash Read Edit Write; do
+  for tool in Bash Read Edit Write Task; do
     case "$MATCHER" in *"$tool"*) ;; *) MISSING="$MISSING $tool";; esac
   done
   if [ -z "$MISSING" ]; then
-    pass "PreToolUse matcher covers Bash/Read/Edit/Write"
+    pass "PreToolUse matcher covers Bash/Read/Edit/Write/Task"
   else
     fail "PreToolUse matcher missing:$MISSING"
   fi

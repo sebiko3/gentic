@@ -57,6 +57,12 @@ class InstallContract(unittest.TestCase):
         for rel in ("hooks/lib/brain.py", "hooks/tests/test_brain.py", "skills/gentic-brain/SKILL.md"):
             self.assertIn(rel, result.stdout, f"installer source list lacks {rel}")
 
+    def test_settings_block_matcher_covers_subagents(self):
+        """The concurrency valve lives in PreToolUse; a matcher without Task|Agent never runs it."""
+        result = run(dest=self.dest)
+        pre = next((line for line in result.stdout.splitlines() if '"PreToolUse"' in line), "")
+        self.assertIn("Task|Agent", pre, "printed PreToolUse matcher lacks the subagent tools")
+
     def test_run_sh_stays_executable(self):
         run(dest=self.dest)
         self.assertTrue(os.access(self.dest / "hooks/tests/run.sh", os.X_OK))
