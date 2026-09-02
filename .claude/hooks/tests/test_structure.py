@@ -20,7 +20,7 @@ REPO = Path(__file__).resolve().parents[3]
 CLAUDE = REPO / ".claude"
 AGENTS = CLAUDE / "agents"
 
-EXPECTED_AGENTS = {"code-reviewer", "dod-auditor", "masterprompt-critic", "task-executor"}
+EXPECTED_AGENTS = {"code-reviewer", "dod-auditor", "masterprompt-critic", "task-executor", "ui-tester"}
 
 # The optional review plugin this setup deliberately does not depend on, and the agents it
 # ships. Naming any of them without marking them optional is the exact bug this suite guards.
@@ -436,6 +436,46 @@ class StandingAuthorizations(unittest.TestCase):
         body = self.lowered(".claude/hooks/README.md")
         self.assertIn("in flight", body)
         self.assertIn("run_in_background", body)
+
+
+class UiContracts(unittest.TestCase):
+    """A UI flow is a Definition-of-Done contract with an e2e runner as its executable half,
+    a ui-tester agent files screenshots as evidence, and Scout walks a runnable product."""
+
+    def lowered(self, rel):
+        return (REPO / rel).read_text(encoding="utf-8").lower()
+
+    def test_ui_grammar_in_masterprompt(self):
+        body = self.lowered(".claude/skills/gentic-masterprompt/SKILL.md")
+        self.assertIn("contract: ui ·", body)
+        self.assertIn("not reproducible in ci", body)
+
+    def test_ui_tdd_names_ui_tasks(self):
+        self.assertIn("## ui tasks", self.lowered(".claude/skills/gentic-tdd/SKILL.md"))
+
+    def test_ui_scout_walks_the_product(self):
+        body = self.lowered(".claude/skills/gentic-scout/SKILL.md")
+        for needle in ("runnable product variant", "feature inventory", "user-facing surface"):
+            self.assertIn(needle, body)
+
+    def test_ui_iterate_dispatches_the_tester(self):
+        self.assertIn("ui-tester", self.lowered(".claude/skills/gentic-iterate/SKILL.md"))
+
+    def test_ui_agent_is_defined(self):
+        path = AGENTS / "ui-tester.md"
+        self.assertTrue(path.is_file(), "ui-tester.md missing")
+        fields = frontmatter(path)
+        self.assertEqual(fields.get("name"), "ui-tester")
+        self.assertTrue(fields.get("description", "").startswith("Use when"), "description is not trigger-style")
+        self.assertNotIn("tools", fields, "ui-tester must inherit the browser tools; no tools: line")
+        body = path.read_text(encoding="utf-8").lower()
+        for needle in ("claude-in-chrome", "claude_browser", "save_to_disk", "never", "personal data"):
+            self.assertIn(needle, body)
+
+    def test_ui_readme_documents_contracts(self):
+        body = self.lowered("README.md")
+        for needle in ("## ui contracts", "ui-tester", "five subagents"):
+            self.assertIn(needle, body)
 
 
 class NoOrphanedSkillFiles(unittest.TestCase):
