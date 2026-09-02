@@ -28,7 +28,7 @@ child run's own masterprompt; the index has nothing executable of its own.
 
 - [x] R1 `sqlite-brain` (brief items 3, 4, 5 substrate; user's decision) — `grep -c '^- \[x\]' docs/gentic/2026-09-02-sqlite-brain/progress.md` → 5
 - [x] R2 `gentic-evals` (items 1, 2, verification regex fix from 11) — `grep -c '^- \[x\]' docs/gentic/2026-09-02-gentic-evals/progress.md` → 5
-- [ ] R3 `adjective-compiler-and-retro` (items 7, `retro.md`, brain-backed)
+- [x] R3 `eval-fidelity` (re-scoped from adjective-compiler-and-retro by R2's lessons; items 7 and `retro.md` move to a later run) — `grep -c '^- \[x\]' docs/gentic/2026-09-02-eval-fidelity/progress.md` → 5
 - [ ] R4 `standing-authorizations` (items 14, 15, 16)
 - [ ] R5 `ui-contracts` (items 11, 13, `ui-tester` agent)
 - [ ] R6 `release-lane` (item 12)

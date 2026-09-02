@@ -14,7 +14,7 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 |---|------|------|------------|------|-----|--------|
 | R1 | child run `2026-09-02-sqlite-brain` | 8 | — | its own DoD | see child (13/13 proven, 2 rung-1 fixes) | done |
 | R2 | child run `gentic-evals` | 8 | R1 | its own DoD | see child (13/13 proven; first score 0.70 vs 0.87) | done |
-| R3 | child run `adjective-compiler-and-retro` | 5 | R1 | its own DoD | — | pending |
+| R3 | child run `2026-09-02-eval-fidelity` (re-scoped from adjective-compiler-and-retro; that work moves to R4+) | 5 | R2 | its own DoD | see child (9/10 proven, F8 in substance; first trustworthy score 0.92 vs 0.35) | done |
 | R4 | child run `standing-authorizations` | 5 | — | its own DoD | — | pending |
 | R5 | child run `ui-contracts` | 8 | R2 | its own DoD | — | pending |
 | R6 | child run `release-lane` | 8 | R4 | its own DoD | — | pending |
@@ -39,3 +39,4 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
   on the brain). Child run `2026-09-02-sqlite-brain` started in this session.
 - 2026-09-02: R1 `sqlite-brain` complete on this branch. Next: R2 `gentic-evals` — its scout should `recall` and `lessons` first; the brain now has content.
 - 2026-09-02: R2 `gentic-evals` complete. First fitness number is negative (with 0.70, without 0.87); three lessons in the brain define R3's scope: headless turn cost of the phases, errored-run scoring, discriminating agent graders, transcript capture.
+- 2026-09-02: R3 `eval-fidelity` complete. The fitness number is now trustworthy: with 0.92, without 0.35, delta +0.57. Four evidence-backed change requests sit in the brain (interview must continue headless; executor report block; without-arm HOME isolation; pii grader symmetry). Suggested R4: `skill-tuning-by-evals` — apply the interview and executor findings and prove them with the suite; the adjective compiler and retro follow.
