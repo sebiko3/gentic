@@ -72,9 +72,18 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 ## Notes / handoff
 ```
 
+## Autonomous runs
+
+When `AskUserQuestion` is unavailable the run is autonomous. Every phase gate is then crossed in
+the same session without pausing for confirmation, defaults are adopted and flagged
+`default — unconfirmed`, and the only legitimate stops are rung 5, rung 8, budget exhaustion, or
+a blocker no default can resolve. Ending a turn to "flag" or to "let the user object" is a stop,
+and it is the failure the fitness suite measures (`csv-export-probe`).
+
 ## Red flags — stop and re-read this skill
 
 - "This part seems clear enough, I'll skip Interview" — routing decides *whether* gentic runs (see CLAUDE.md); once it runs, every phase runs. Phases may be *short*, never absent.
 - "I'll fix the artifact by hand" — if a gate fails, re-run the phase skill; artifacts are outputs of phases, not scratch files.
 - "I remember the context, no need to re-read artifacts" — after resume or compaction, memory is the thing that failed. Artifacts are the source of truth.
 - Starting a second goal inside an existing run — one run directory per goal; new goal, new run.
+- "I'll proceed unless you object" — in an autonomous run there is nobody to object; continue, and put the flag in the report.

@@ -368,6 +368,35 @@ class BrainWiring(unittest.TestCase):
         self.assertIn('= "8"', run_sh, "run.sh does not expect 8 gentic skills")
 
 
+class AutonomousRuns(unittest.TestCase):
+    """The fitness suite showed a headless run stopping at the Interview to "flag" defaults and
+    the executor answering in prose. The rules that prevent both live in the wording below."""
+
+    def lowered(self, rel):
+        return (REPO / rel).read_text(encoding="utf-8").lower()
+
+    def test_interview_continues_when_no_question_can_be_asked(self):
+        body = self.lowered(".claude/skills/gentic-interview/SKILL.md")
+        for needle in ('`askuserquestion` is unavailable', 'never end the turn', 'return to the orchestrator'):
+            self.assertIn(needle, body)
+
+    def test_orchestrator_has_an_autonomous_runs_section(self):
+        body = self.lowered(".claude/skills/gentic/SKILL.md")
+        self.assertIn('## autonomous runs', body)
+        self.assertIn('nobody to object', body)
+
+    def test_executor_block_is_the_entire_message(self):
+        body = self.lowered(".claude/agents/task-executor.md")
+        output = body[body.index('## output'):]
+        self.assertIn('entire final message', output)
+        self.assertIn('assignment unclear', output)
+
+    def test_readme_says_headless_runs_continue(self):
+        body = self.lowered("README.md")
+        self.assertIn('no `askuserquestion`', body)
+        self.assertIn("don't stop to flag", body)
+
+
 class NoOrphanedSkillFiles(unittest.TestCase):
     """A file shipped inside a skill that its SKILL.md never mentions is invisible.
 

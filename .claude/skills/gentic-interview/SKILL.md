@@ -36,7 +36,13 @@ Question types worth asking, in rough priority:
 
 ## Non-interactive rule
 
-If the session is autonomous (user away, scheduled run, or AskUserQuestion unavailable): do not block. Adopt the brief's recommended default for every open decision, set Source to `default — unconfirmed`, and make sure the final report to the user lists every unconfirmed default prominently.
+If `AskUserQuestion` is unavailable, the session is autonomous — whatever it looks like. Adopt
+the brief's recommended default for every open decision, set Source to `default — unconfirmed`,
+write `decisions.md`, and **do not end the turn: return to the orchestrator, which crosses the
+gate and invokes `gentic-masterprompt` in the same session. Never end the turn to ask, to flag,
+or to wait for an objection**: the flags belong in the final report, which lists every
+unconfirmed default prominently. Data, security and money decisions are adopted the same way,
+with their flag — the report is where the user reverses them.
 
 ## decisions.md template
 
