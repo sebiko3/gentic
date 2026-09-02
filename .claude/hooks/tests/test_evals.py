@@ -180,7 +180,7 @@ class Invocation(EvalsCase):
         self.assertEqual(len(records), 2)
         with_argv, without_argv = records[0]["argv"], records[1]["argv"]
         expected = ["-p", "Hello there.", "--output-format", "stream-json", "--verbose", "--max-turns", "5",
-                    "--max-budget-usd", "3", "--permission-mode", "dontAsk", "--allowedTools", "Read", "Bash",
+                    "--max-budget-usd", "5", "--permission-mode", "dontAsk", "--allowedTools", "Read", "Bash",
                     "--no-session-persistence", "--model", "sonnet"]
         self.assertEqual(with_argv, expected)
         self.assertEqual(without_argv, expected + ["--setting-sources", "project"])
@@ -451,7 +451,7 @@ class FiveCases(unittest.TestCase):
                 for grader in case.graders:
                     self.assertIn(grader.type, ("regex", "file_exists", "tool_used"))
                 if name == "csv-export-probe":
-                    self.assertEqual(case.max_turns, 55)
+                    self.assertEqual(case.max_turns, 89)
                     self.assertEqual(case.runs, 1)
                     self.assertEqual(case.allowed_tools, ["Read", "Glob", "Grep", "Write", "Edit", "Bash"])
                 else:

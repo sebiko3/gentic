@@ -1,6 +1,6 @@
 # Run: ui-contracts
 Goal: UI becomes a first-class Definition-of-Done contract — an executable e2e spec as the contract, a `ui-tester` agent that drives the real browser and files screenshots as evidence, and a Scout that walks a running product before it asks anything.
-Iteration budget: 12 remaining (1 spent: rung 1 on U7's screenshot method) (rungs spend it; task sizes never do)
+Iteration budget: 11 remaining (2 spent: rung 1 on U7's screenshot method, rung 1 on U8's turn budget) (rungs spend it; task sizes never do)
 
 ## Phases
 - [x] 1 Scout
@@ -23,6 +23,7 @@ Sizes are planning estimates only; they never spend the iteration budget. Order 
 | # | DoD item | Rung | Points | Result |
 |---|----------|------|--------|--------|
 | 1 | U7 screenshot method | 1 | 1 | The extension's `save_to_disk` writes no file (probed from the inlined agent and from the main thread: "Successfully captured screenshot … ID: ss_…", no path). The agent improvised headless Chrome and disclosed it; the method now codifies that fallback. U7's pass condition itself was met (see below). |
+| 2 | U8 regression gate (suite 20260902-215633) | 1 | 1 | FAILED: `with 3/4 (0.75) exhausted`, 56 turns, 2.28 USD, `pii-surfaced` failed. Transcript: the Scout variant did **not** fire (0 browser/server tool uses); 64 tool uses went Scout→Interview→Masterprompt→Execute (23 edits) and the limit hit mid-Execute, so no final message existed for the last-message grader. Root cause: the 55-turn budget's zero headroom (brain note after R4). Fix: `csv-export-probe` `max_turns: 89`, per-run cap 5 USD (Fibonacci), expectations updated first (RED `55 != 89`, `'3' != '5'`); README updated. Second and last U8 invocation follows. |
 
 ## Notes / handoff
 - Child run R6 of the epic `2026-09-02-self-improving-gentic` (brief items 11 and 13, the

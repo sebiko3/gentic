@@ -155,7 +155,7 @@ itself is unverified here):
 
 ```bash
 python3 evals/run.py --dry-run          # preflight, list cases and the exact claude argv, spend nothing
-python3 evals/run.py                    # both arms, one run per case, sonnet, budgets 2 / 21 USD
+python3 evals/run.py                    # both arms, one run per case, sonnet, budgets 5 / 21 USD
 python3 ~/.claude/hooks/lib/brain.py evals   # `brain evals`: the latest suite's numbers, from the brain
 ```
 
@@ -164,7 +164,7 @@ sees your installed setup exactly as you do; the **without** arm passes
 `--setting-sources project`, which loads no user skills, hooks or agents. The difference is
 the score. Graders are deterministic — `regex` over the final message or the created files,
 `file_exists` over files the agent created, `tool_used` over the transcript — so a number is
-reproducible and free to compute; only the sessions cost money, and they are capped at 2 USD
+reproducible and free to compute; only the sessions cost money, and they are capped at 5 USD
 per run and 21 USD per suite, checked before each launch. Nothing runs the suite unattended,
 and the hook harness never invokes it.
 
@@ -189,8 +189,9 @@ Three fidelity rules, each learned from the first live suite. A session that run
 is **exhausted**, not failed: the CLI reports `error_max_turns` with no final message, so the
 runner grades what the session created and did and takes its last spoken text as the last
 message; the console and `brain evals` mark such an arm `exhausted`. The workflow case gets
-**55 turns** and every run a **3 USD** cap, because gentic's Scout and Interview alone took
-22 turns in the first suite and a 21-turn limit scored a written brief as nothing. Agent cases
+**89 turns** and every run a **5 USD** cap: gentic's Scout and Interview alone took 22 turns in
+the first suite, a 21-turn limit scored a written brief as nothing, and 55 turns finished a
+three-task feature twice with no headroom and then cut a third run off mid-Execute. Agent cases
 run three times (`runs: 3` in their frontmatter) because a single reply is noise, and their
 graders assert the shape each agent definition promises — the auditor's `UNVERIFIABLE` verdict
 and closing count, the critic's five named scans, the executor's `status:` line, the reviewer's

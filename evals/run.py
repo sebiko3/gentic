@@ -32,7 +32,7 @@ EVALS_DIR = REPO / "evals"
 # Fibonacci-derived balancing values (house rule).
 DEFAULT_MAX_TURNS = 13
 DEFAULT_TIMEOUT = 900
-DEFAULT_RUN_BUDGET = 3.0
+DEFAULT_RUN_BUDGET = 5.0
 DEFAULT_SUITE_BUDGET = 21.0
 DEFAULT_MODEL = "sonnet"
 DEFAULT_TOOLS = ["Read", "Glob", "Grep", "Write", "Edit", "Bash"]
