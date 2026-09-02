@@ -12,7 +12,7 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 ## Tasks
 | # | Task | Size | Depends on | Test | RED | Status |
 |---|------|------|------------|------|-----|--------|
-| 1 | `lib/brain.py` core: schema, project key, note/recall (FTS + LIKE), sql with .bak, record_event with scrubbing (D1, D2, D6 storage) | 5 | — | `tests/test_brain.py::test_note_then_recall_finds_it`, `::test_recall_falls_back_to_like`, `::test_sql_is_unrestricted_inside_the_brain`, `::test_sql_destructive_statement_leaves_a_backup` | | pending |
+| 1 | `lib/brain.py` core: schema, project key, note/recall (FTS + LIKE), sql with .bak, record_event with scrubbing (D1, D2, D6 storage) | 5 | — | `tests/test_brain.py::test_note_then_recall_finds_it`, `::test_recall_falls_back_to_like`, `::test_sql_is_unrestricted_inside_the_brain`, `::test_sql_destructive_statement_leaves_a_backup` | `AssertionError: 2 != 0 : brain CLI did not run: … can't open file '…/lib/brain.py'` (all four) | done |
 | 2 | Hook wiring (post_tool_use, stop) + invisibility guard + third latency median (D6, D7, D12 latency) | 3 | 1 | `::test_hooks_write_events_to_the_brain`, `::test_brain_failure_is_invisible_to_hooks` | | pending |
 | 3 | decide/preference, lesson/lessons/stats, run/stamp, scoping (D3, D4, D5, D9) | 5 | 1 | `::test_preference_needs_two_agreeing_user_decisions`, `::test_lessons_recorded_and_summarised`, `::test_run_lifecycle_and_stamps`, `::test_lessons_default_to_current_project` | | pending |
 | 4 | session_start brain line (D8) | 2 | 3 | `::test_session_start_mentions_brain_when_it_has_something` | | pending |
