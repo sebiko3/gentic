@@ -345,8 +345,9 @@ def execute_run(case, arm, index, args, claude, workspaces, hooks_brain):
     keep_output(entry, workspace.name, args.results_dir, proc.stdout, proc.stderr)
     facts = parse_transcript(proc.stdout)
     entry.update({"cost_usd": facts["cost"], "turns": facts["turns"], "_last": facts["result"], "_tools": facts["tools"]})
-    if facts["subtype"] == "error_max_turns":
-        # The session ran out of turns: what it created and did is real, so it is graded.
+    if facts["subtype"].startswith("error_max_"):
+        # The session ran out of turns or of budget: what it created and did is real, so it
+        # is graded. (The dollar cap's exact subtype is unverified; the prefix covers it.)
         entry["exhausted"] = True
     elif proc.returncode != 0 or facts["is_error"]:
         entry["is_error"] = True

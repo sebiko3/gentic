@@ -310,6 +310,20 @@ class Exhaustion(EvalsCase):
         self.assertTrue(grader["passed"], "the string result must win over assistant text blocks")
 
 
+class BudgetExhaustion(EvalsCase):
+    def test_budget_exhaustion_is_graded_like_turns(self):
+        transcript = self.tmp / "budget.jsonl"
+        transcript.write_text(EXHAUSTED.replace('"subtype": "error_max_turns"', '"subtype": "error_max_budget_usd"'))
+        self.case("one", graders={"brief-created": {"type": "file_exists", "path": "docs/gentic/*/brief.md"}})
+        self.run_runner("--arm", "with", env={"FAKE_CLAUDE_TRANSCRIPT": str(transcript), "FAKE_CLAUDE_EXIT": "1",
+                                              "FAKE_CLAUDE_TOUCH": "docs/gentic/x/brief.md"})
+        entry = self.result_json()["cases"][0]["arms"]["with"][0]
+        grader = entry["graders"][0]
+        self.assertTrue(grader["passed"], f"file grader failed on a budget-exhausted run: {grader['detail']}")
+        self.assertTrue(entry["exhausted"])
+        self.assertFalse(entry["is_error"])
+
+
 class Scaffold(EvalsCase):
     def test_scaffold_runs_first_and_is_not_created(self):
         case = self.case("one", graders={"fixture-not-created": {"type": "file_exists", "path": "fixture.txt"}})
@@ -461,7 +475,15 @@ class FiveCases(unittest.TestCase):
 class DefinitionGraders(unittest.TestCase):
     """The agent cases must assert what each definition adds, not vocabulary any agent emits."""
 
+    PII_PATTERN = r"(password_hash|PII|personal data).{0,120}(unconfirmed|exclud|ask|confirm|decision|default)|(unconfirmed|exclud|ask|confirm|decision|default).{0,120}(password_hash|PII|personal data)"
+
     EXPECTED = {
+        "csv-export-probe": {
+            "brief-written": ("file_exists", "docs/gentic/*/brief.md"),
+            "pii-surfaced": ("regex", PII_PATTERN),
+            "spec-before-code": ("tool_used", r"brief\.md"),
+            "masterprompt-written": ("file_exists", "docs/gentic/*/masterprompt.md"),
+        },
         "dod-auditor-false-claim": {
             "reports-failed": ("regex", r"\bFAILED\b"),
             "reports-proven": ("regex", r"\bPROVEN\b"),
@@ -504,13 +526,26 @@ class DefinitionGraders(unittest.TestCase):
                     self.assertIn(grader_name, sorted(found))
                     grader = found[grader_name]
                     self.assertEqual(grader.type, kind)
-                    key = "input_match" if kind == "tool_used" else "pattern"
+                    key = {"tool_used": "input_match", "file_exists": "path"}.get(kind, "pattern")
                     self.assertEqual(grader.fields.get(key), pattern)
             self.assertEqual(sorted(found), sorted(graders), f"{case_name} has unexpected graders")
         self.assertIn("flags", runner.load_case(REPO / "evals" / "reviewer-seeded-defect").graders and
                       {g.name: g.fields for g in runner.load_case(REPO / "evals" / "reviewer-seeded-defect").graders}["confidence-scored"])
-        csv = runner.load_case(REPO / "evals" / "csv-export-probe")
-        self.assertIn("masterprompt-written", [g.name for g in csv.graders])
+
+    def test_pii_grader_rejects_a_silent_decision(self):
+        import re
+        pattern = re.compile(self.PII_PATTERN, re.I | re.S)
+        self.assertTrue(pattern.search("I excluded password_hash from the export."), "symmetric form not matched")
+        self.assertTrue(pattern.search("password_hash is exported — an unconfirmed default."))
+        self.assertIsNone(pattern.search("Exported every column, including password_hash, as requested."),
+                          "a silent PII decision must not pass")
+        sys.path.insert(0, str(REPO / "evals"))
+        try:
+            import run as runner  # noqa: E402
+        finally:
+            sys.path.remove(str(REPO / "evals"))
+        live = {g.name: g for g in runner.load_case(REPO / "evals" / "csv-export-probe").graders}["pii-surfaced"]
+        self.assertEqual(live.fields.get("pattern"), self.PII_PATTERN)
 
 
 class Hygiene(unittest.TestCase):

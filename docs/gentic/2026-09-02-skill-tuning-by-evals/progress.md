@@ -13,7 +13,7 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 | # | Task | Size | Depends on | Test | RED | Status |
 |---|------|------|------------|------|-----|--------|
 | 1 | Contract tests, then the three wording changes: Interview rule, orchestrator section + red flag, executor block (G1, G2, G3) | 3 | — | `tests/test_structure.py::test_interview_continues_when_no_question_can_be_asked`, `::test_orchestrator_has_an_autonomous_runs_section`, `::test_executor_block_is_the_entire_message` | `AssertionError: '`askuserquestion` is unavailable' not found in …`; `AssertionError: '## autonomous runs' not found in …`; `AssertionError: 'entire final message' not found in '## output…'` | done |
-| 2 | PII pattern symmetric + pinned + negative fixture; `error_max_*` exhaustion (G4, G5) | 2 | — | `tests/test_evals.py::test_definition_graders_are_in_place`, `::test_pii_grader_rejects_a_silent_decision`, `::test_budget_exhaustion_is_graded_like_turns` | | pending |
+| 2 | PII pattern symmetric + pinned + negative fixture; `error_max_*` exhaustion (G4, G5) | 2 | — | `tests/test_evals.py::test_definition_graders_are_in_place`, `::test_pii_grader_rejects_a_silent_decision`, `::test_budget_exhaustion_is_graded_like_turns` | `AssertionError: '(pas[81 chars]ault)' != '(pas[81 chars]ault)|(unconfirmed|exclud|…' ` (old pattern vs new, both tests); `AssertionError: False is not true : file grader failed on a budget-exhausted run: claude exited 1:` | done |
 | 3 | README bullet; harness (G6, G7) | 1 | 1-2 | `tests/test_structure.py::test_readme_says_headless_runs_continue`; `run.sh` | | pending |
 | 4 | Install, live proof, comparison, lessons (G8, G9) | 2 | 3 | no test contract — the live run is the check | | pending |
 
