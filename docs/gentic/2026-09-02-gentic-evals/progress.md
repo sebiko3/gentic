@@ -12,7 +12,7 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 ## Tasks
 | # | Task | Size | Depends on | Test | RED | Status |
 |---|------|------|------------|------|-----|--------|
-| 1 | Runner skeleton: flat parser, discovery, argv, preflight, `--dry-run`; fake-`claude` test harness (E0, E1) | 5 | — | `tests/test_evals.py::test_preflight_refuses_a_missing_flag`, `::test_dry_run_lists_cases_and_argv` | | pending |
+| 1 | Runner skeleton: flat parser, discovery, argv, preflight, `--dry-run`; fake-`claude` test harness (E0, E1) | 5 | — | `tests/test_evals.py::test_preflight_refuses_a_missing_flag`, `::test_dry_run_lists_cases_and_argv` | `AssertionError: 2 != 1 : runner did not refuse`; `AssertionError: 2 != 0 : runner did not run: … can't open file '…/evals/run.py'` | done |
 | 2 | Invocation and per-run workspaces, `GENTIC_BRAIN` redirection (E2) | 2 | 1 | `::test_invocation_flags_per_arm` | | pending |
 | 3 | Graders, created-file snapshot, scaffold, timeout (E3, E4) | 5 | 2 | `::test_graders_score_a_replayed_transcript`, `::test_scaffold_runs_first_and_is_not_created` | | pending |
 | 4 | Brain `eval_runs`/`eval_graders`, record functions, `brain evals`, runner integration, `--no-brain` (E5) | 3 | 2 | `::test_brain_rows_and_evals_summary` | | pending |
