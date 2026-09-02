@@ -265,7 +265,7 @@ claimed. `test_structure.py` exists so that class of defect cannot pass unnotice
 ```
 
 - New non-trivial task → gentic starts a run and interviews you (up to 4 multiple-choice questions per round, recommendation listed first).
-- You're away? Runs don't block: gentic adopts the scouted default for each question, flags it `unconfirmed`, and lists every assumption in the final report.
+- You're away, or the session is headless (`claude -p`, no `AskUserQuestion`)? Runs don't block and don't stop to flag: gentic adopts the scouted default for each question, flags it `unconfirmed`, continues through every phase, and lists every assumption in the final report.
 - `resume` / `continue` → gentic finds the newest unfinished run and re-enters at the first unchecked phase.
 - `/gentic status` → every run, its phase, tasks done, budget remaining.
 
