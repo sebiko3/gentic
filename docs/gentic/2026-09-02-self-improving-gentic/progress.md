@@ -16,7 +16,8 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 | R2 | child run `gentic-evals` | 8 | R1 | its own DoD | see child (13/13 proven; first score 0.70 vs 0.87) | done |
 | R3 | child run `2026-09-02-eval-fidelity` (re-scoped from adjective-compiler-and-retro; that work moves to R4+) | 5 | R2 | its own DoD | see child (9/10 proven, F8 in substance; first trustworthy score 0.92 vs 0.35) | done |
 | R4 | child run `2026-09-02-skill-tuning-by-evals` (inserted by R3's findings; standing-authorizations becomes R5) | 3 | R3 | its own DoD | see child (9/9 proven; with 1.00 / without 0.20) | done |
-| R5 | child run `ui-contracts` | 8 | R2 | its own DoD | — | pending |
+| R5 | child run `2026-09-02-standing-authorizations` | 5 | R4 | its own DoD | see child (7/7 proven; regression 4/4) | done |
+| R5b | child run `ui-contracts` | 8 | R2 | its own DoD | — | pending |
 | R6 | child run `release-lane` | 8 | R4 | its own DoD | — | pending |
 | R7 | child run `gentic-epic` | 8 | R3, R4, R5 | its own DoD | — | pending |
 | R8 | child run `orchestrator-mesh` | 8 | R1, R7 | its own DoD | — | pending |
@@ -41,3 +42,4 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 - 2026-09-02: R2 `gentic-evals` complete. First fitness number is negative (with 0.70, without 0.87); three lessons in the brain define R3's scope: headless turn cost of the phases, errored-run scoring, discriminating agent graders, transcript capture.
 - 2026-09-02: R3 `eval-fidelity` complete. The fitness number is now trustworthy: with 0.92, without 0.35, delta +0.57. Four evidence-backed change requests sit in the brain (interview must continue headless; executor report block; without-arm HOME isolation; pii grader symmetry). Suggested R4: `skill-tuning-by-evals` — apply the interview and executor findings and prove them with the suite; the adjective compiler and retro follow.
 - 2026-09-02: R4 `skill-tuning-by-evals` complete — the first evidence-driven change to gentic itself, proven by the suite (with 1.00, without 0.20). Remaining roadmap: standing-authorizations, ui-contracts, release-lane, gentic-epic, orchestrator-mesh, gardener, then the adjective compiler and retro.
+- 2026-09-02: R5 `standing-authorizations` complete — grants in CLAUDE.md plus a machine-side trust file; runs may push and open PRs only when both hold; valve at 5 subagents; STOP file. Next: `ui-contracts`, then `release-lane` (the first real push under a grant).

@@ -30,7 +30,7 @@ child run's own masterprompt; the index has nothing executable of its own.
 - [x] R2 `gentic-evals` (items 1, 2, verification regex fix from 11) — `grep -c '^- \[x\]' docs/gentic/2026-09-02-gentic-evals/progress.md` → 5
 - [x] R3 `eval-fidelity` (re-scoped from adjective-compiler-and-retro by R2's lessons; items 7 and `retro.md` move to a later run) — `grep -c '^- \[x\]' docs/gentic/2026-09-02-eval-fidelity/progress.md` → 5
 - [x] R4 `skill-tuning-by-evals` (inserted; the suite's own findings applied and proven) — `grep -c '^- \[x\]' docs/gentic/2026-09-02-skill-tuning-by-evals/progress.md` → 5
-- [ ] R5 `standing-authorizations` (items 14, 15, 16)
+- [x] R5 `standing-authorizations` (items 14 and 16; 15 deferred to `gentic-epic`) — `grep -c '^- \[x\]' docs/gentic/2026-09-02-standing-authorizations/progress.md` → 5
 - [ ] R5 `ui-contracts` (items 11, 13, `ui-tester` agent)
 - [ ] R6 `release-lane` (item 12)
 - [ ] R7 `gentic-epic` (item 8)
