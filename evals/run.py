@@ -31,7 +31,7 @@ EVALS_DIR = REPO / "evals"
 # Fibonacci-derived balancing values (house rule).
 DEFAULT_MAX_TURNS = 13
 DEFAULT_TIMEOUT = 900
-DEFAULT_RUN_BUDGET = 2.0
+DEFAULT_RUN_BUDGET = 3.0
 DEFAULT_SUITE_BUDGET = 21.0
 DEFAULT_MODEL = "sonnet"
 DEFAULT_TOOLS = ["Read", "Glob", "Grep", "Write", "Edit", "Bash"]
@@ -69,7 +69,10 @@ def parse_flat(text):
             value = value == "true"
         elif re.fullmatch(r"-?\d+", value):
             value = int(value)
-        elif len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        elif (len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'"
+              and value[0] not in value[1:-1]):
+            # Outer quotes are stripped only when the value holds no other such quote;
+            # `"subagent_type": "x"` stays verbatim.
             value = value[1:-1]
         fields[key.strip()] = value
     return fields
@@ -513,6 +516,7 @@ def run_suite(cases, args):
                     result = execute_run(case, arm, index, args, claude, workspaces, hooks_brain)
                     result["graders"] = grade(case, result)
                 case_cost += result["cost_usd"]
+                total_cost += result["cost_usd"]   # per run, so the ceiling sees every run
                 entry["arms"][arm].append(public(result))
                 if brain:
                     run_id = brain.record_eval_run(str(REPO), suite, case.name, arm, index, result["model"],
@@ -523,7 +527,6 @@ def run_suite(cases, args):
             entry["pass_rate"][arm] = round(arm_rate(entry["arms"][arm]), 4)
         if "with" in entry["arms"] and "without" in entry["arms"]:
             entry["delta"] = round(entry["pass_rate"]["with"] - entry["pass_rate"]["without"], 4)
-        total_cost += case_cost
         report["cases"].append(entry)
         print(console_line(case.name, entry["arms"], case_cost))
     suite_rates = {}

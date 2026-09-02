@@ -1,7 +1,7 @@
 ---
 type: tool_used
 tool: Task
-input_match: dod-auditor
+input_match: "subagent_type": "dod-auditor"
 min: 1
 ---
-The verdict came from the dod-auditor agent, not from the main thread's own opinion.
+The verdict came from the dod-auditor agent, dispatched by that exact name.

@@ -180,7 +180,7 @@ class Invocation(EvalsCase):
         self.assertEqual(len(records), 2)
         with_argv, without_argv = records[0]["argv"], records[1]["argv"]
         expected = ["-p", "Hello there.", "--output-format", "stream-json", "--verbose", "--max-turns", "5",
-                    "--max-budget-usd", "2", "--permission-mode", "dontAsk", "--allowedTools", "Read", "Bash",
+                    "--max-budget-usd", "3", "--permission-mode", "dontAsk", "--allowedTools", "Read", "Bash",
                     "--no-session-persistence", "--model", "sonnet"]
         self.assertEqual(with_argv, expected)
         self.assertEqual(without_argv, expected + ["--setting-sources", "project"])
@@ -380,6 +380,18 @@ class Money(EvalsCase):
         self.assertIn("delta", totals)
 
         self.argv_log.unlink()
+        for name in ("a", "b", "c"):
+            shutil.rmtree(self.evals / name)
+        self.case("triple", fields={"runs": 3})
+        proc = self.run_runner("--arm", "with", "--max-budget-usd", "8", "--suite-budget-usd", "21",
+                               env={"FAKE_CLAUDE_TRANSCRIPT": str(expensive)})
+        self.assertEqual(len(self.records()), 2, "ceiling ignored runs inside a case")
+        self.assertEqual(proc.returncode, 2)
+        shutil.rmtree(self.evals / "triple")
+        for name in ("a", "b", "c"):
+            self.case(name)
+
+        self.argv_log.unlink()
         proc = self.run_runner("--arm", "with", "--suite-budget-usd", "100")
         self.assertEqual(proc.returncode, 0, proc.stdout)
         self.assertEqual(len(self.records()), 3)
@@ -408,10 +420,12 @@ class FiveCases(unittest.TestCase):
                 for grader in case.graders:
                     self.assertIn(grader.type, ("regex", "file_exists", "tool_used"))
                 if name == "csv-export-probe":
-                    self.assertEqual(case.max_turns, 21)
+                    self.assertEqual(case.max_turns, 55)
+                    self.assertEqual(case.runs, 1)
                     self.assertEqual(case.allowed_tools, ["Read", "Glob", "Grep", "Write", "Edit", "Bash"])
                 else:
                     self.assertEqual(case.max_turns, 8)
+                    self.assertEqual(case.runs, 3)
                     self.assertEqual(case.allowed_tools, ["Read", "Glob", "Grep", "Bash", "Task"])
                 if name != "executor-refuses-vague":
                     self.assertTrue(case.scaffold_script, f"{name} has no scaffold")
@@ -425,6 +439,61 @@ class FiveCases(unittest.TestCase):
                 self.assertNotIn("import flask", path.read_text().lower(), "fixture must be stdlib-only")
         proc = subprocess.run([sys.executable, "-m", "unittest", "-q"], cwd=str(fixture), text=True, capture_output=True)
         self.assertEqual(proc.returncode, 0, proc.stderr)
+
+
+class DefinitionGraders(unittest.TestCase):
+    """The agent cases must assert what each definition adds, not vocabulary any agent emits."""
+
+    EXPECTED = {
+        "dod-auditor-false-claim": {
+            "reports-failed": ("regex", r"\bFAILED\b"),
+            "reports-proven": ("regex", r"\bPROVEN\b"),
+            "reports-unverifiable": ("regex", r"\bUNVERIFIABLE\b"),
+            "closing-count": ("regex", r"\d+ proven, \d+ failed, \d+ unverifiable"),
+            "used-the-agent": ("tool_used", '"subagent_type": "dod-auditor"'),
+        },
+        "critic-finds-contradiction": {
+            "names-the-contradiction": ("regex", r"network.{0,160}(download|data\.csv|DoD)|(download|data\.csv|DoD).{0,160}network"),
+            "five-scans": ("regex", r"(?=.*two readings)(?=.*contradiction)(?=.*unverifiable)(?=.*missing non-goal)(?=.*unstated assumption)"),
+            "used-the-agent": ("tool_used", '"subagent_type": "masterprompt-critic"'),
+        },
+        "executor-refuses-vague": {
+            "status-line": ("regex", r"^\s*status:\s*(assignment unclear|blocked)"),
+            "used-the-agent": ("tool_used", '"subagent_type": "task-executor"'),
+        },
+        "reviewer-seeded-defect": {
+            "finds-injection": ("regex", "load_user"),
+            "finds-silent-failure": ("regex", "record_login"),
+            "ignores-decoy": ("regex", r"get_usr_nm[^\n]{0,80}confidence (8|9)\d"),
+            "confidence-scored": ("regex", r"confidence \d{2,3}"),
+            "not-reported-count": ("regex", "not reported"),
+        },
+    }
+
+    def test_definition_graders_are_in_place(self):
+        sys.path.insert(0, str(REPO / "evals"))
+        try:
+            import run as runner  # noqa: E402
+        finally:
+            sys.path.remove(str(REPO / "evals"))
+        parsed = runner.parse_flat('input_match: "subagent_type": "dod-auditor"')
+        self.assertEqual(parsed["input_match"], '"subagent_type": "dod-auditor"', "parser mangles an inner-colon value")
+        self.assertEqual(runner.parse_flat('x: "quoted"')["x"], "quoted")
+        for case_name, graders in self.EXPECTED.items():
+            case = runner.load_case(REPO / "evals" / case_name)
+            found = {g.name: g for g in case.graders}
+            for grader_name, (kind, pattern) in graders.items():
+                with self.subTest(case=case_name, grader=grader_name):
+                    self.assertIn(grader_name, sorted(found))
+                    grader = found[grader_name]
+                    self.assertEqual(grader.type, kind)
+                    key = "input_match" if kind == "tool_used" else "pattern"
+                    self.assertEqual(grader.fields.get(key), pattern)
+            self.assertEqual(sorted(found), sorted(graders), f"{case_name} has unexpected graders")
+        self.assertIn("flags", runner.load_case(REPO / "evals" / "reviewer-seeded-defect").graders and
+                      {g.name: g.fields for g in runner.load_case(REPO / "evals" / "reviewer-seeded-defect").graders}["confidence-scored"])
+        csv = runner.load_case(REPO / "evals" / "csv-export-probe")
+        self.assertIn("masterprompt-written", [g.name for g in csv.graders])
 
 
 class Hygiene(unittest.TestCase):
