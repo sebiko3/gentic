@@ -566,7 +566,7 @@ class Hygiene(unittest.TestCase):
 
     def test_docs_fidelity_is_documented(self):
         readme = (REPO / "README.md").read_text(encoding="utf-8")
-        for token in ("transcript.jsonl", "exhausted", "55", "22 turns", "runs: 3", "3 USD"):
+        for token in ("transcript.jsonl", "exhausted", "89", "22 turns", "runs: 3", "5 USD"):
             self.assertIn(token, readme, f"README does not mention {token!r}")
 
     def test_manifest_and_gitignore(self):
