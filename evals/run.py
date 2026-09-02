@@ -272,6 +272,22 @@ def snapshot(workspace):
     return {str(p.relative_to(workspace)) for p in Path(workspace).rglob("*") if p.is_file()}
 
 
+def scaffold(case, workspace):
+    """Run the case's scaffold script in the workspace. Returns an error string or None."""
+    if not case.scaffold_script:
+        return None
+    script = case.directory / case.scaffold_script
+    env = dict(os.environ, EVAL_CASE_DIR=str(case.directory), EVAL_REPO=str(REPO))
+    try:
+        proc = subprocess.run(["bash", str(script)], cwd=str(workspace), env=env, text=True,
+                              capture_output=True, timeout=300)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return f"scaffold failed: {exc}"
+    if proc.returncode != 0:
+        return f"scaffold failed ({proc.returncode}): {proc.stderr.strip()[:300]}"
+    return None
+
+
 def execute_run(case, arm, index, args, claude, workspaces, hooks_brain):
     """One headless session in a fresh workspace. Returns the arm entry for result.json."""
     workspace = workspaces / f"{case.name}-{arm}-{index}"
@@ -280,6 +296,12 @@ def execute_run(case, arm, index, args, claude, workspaces, hooks_brain):
     entry = {"model": model, "cost_usd": 0.0, "turns": 0, "is_error": False, "skipped": False,
              "graders": [], "_last": "", "_tools": [], "_created": set(), "_error": None}
     env = dict(os.environ, GENTIC_BRAIN=str(hooks_brain))
+    problem = scaffold(case, workspace)
+    if problem:
+        entry["is_error"] = True
+        entry["_error"] = problem
+        return entry
+    # Taken after the scaffold: what the scaffold placed is never "created" by the agent.
     before = snapshot(workspace)
     try:
         with open(os.devnull) as devnull:
@@ -299,8 +321,97 @@ def execute_run(case, arm, index, args, claude, workspaces, hooks_brain):
     return entry
 
 
+# --- grading ---------------------------------------------------------------------------
+
+RE_FLAGS = {"i": re.IGNORECASE, "m": re.MULTILINE, "s": re.DOTALL}
+
+
+def evaluate(grader, entry):
+    """One grader's verdict over a finished run. Never raises."""
+    fields = grader.fields
+    kind = grader.type
+    try:
+        if kind == "regex":
+            pattern = str(fields.get("pattern", ""))
+            flags = 0
+            for letter in str(fields.get("flags", "")):
+                flags |= RE_FLAGS.get(letter, 0)
+            target = str(fields.get("target", "last_message"))
+            text = "\n".join(sorted(entry["_created"])) if target == "files" else entry["_last"]
+            found = re.search(pattern, text, flags) is not None
+            wanted = str(fields.get("match", "contains")) != "not_contains"
+            passed = found == wanted
+            detail = f"{'matched' if found else 'no match for'} /{pattern}/ in {target}"
+        elif kind == "file_exists":
+            pattern = str(fields.get("path", ""))
+            hits = sorted(p for p in entry["_created"] if fnmatch.fnmatchcase(p, pattern))
+            passed = bool(hits)
+            detail = f"created {', '.join(hits)}" if hits else f"no created file matches {pattern}"
+        elif kind == "tool_used":
+            tool = str(fields.get("tool", ""))
+            names = {"Task", "Agent"} if tool in ("Task", "Agent") else {tool}
+            input_match = fields.get("input_match")
+            count = 0
+            for use in entry["_tools"]:
+                if use["name"] not in names:
+                    continue
+                if input_match and not re.search(str(input_match), json.dumps(use["input"], sort_keys=True)):
+                    continue
+                count += 1
+            low = int(fields.get("min", 1))
+            high = fields.get("max")
+            passed = count >= low and (high is None or count <= int(high))
+            detail = f"{tool} used {count} time(s)"
+        else:
+            passed, detail = False, f"unsupported grader {kind}"
+    except (re.error, ValueError, TypeError) as exc:
+        passed, detail = False, f"grader error: {exc}"
+    return {"name": grader.name, "type": kind, "passed": bool(passed), "detail": detail}
+
+
+def grade(case, entry):
+    if entry["_error"]:
+        return [{"name": g.name, "type": g.type, "passed": False, "detail": entry["_error"]} for g in case.graders]
+    return [evaluate(grader, entry) for grader in case.graders]
+
+
+def run_score(run):
+    graders = run["graders"]
+    if run.get("skipped") or not graders:
+        return 0.0
+    return sum(1 for g in graders if g["passed"]) / len(graders)
+
+
+def arm_rate(runs):
+    scored = [run_score(r) for r in runs if not r.get("skipped")]
+    return sum(scored) / len(scored) if scored else 0.0
+
+
+def counts(runs):
+    passed = sum(1 for r in runs for g in r["graders"] if g["passed"])
+    total = sum(len(r["graders"]) for r in runs)
+    return passed, total
+
+
 def public(entry):
     return {k: v for k, v in entry.items() if not k.startswith("_")}
+
+
+def console_line(name, arms, cost):
+    parts = [f"{name:28}"]
+    for arm in ("with", "without"):
+        runs = arms.get(arm)
+        if runs is None:
+            continue
+        if runs and all(r.get("skipped") for r in runs):
+            parts.append(f"{arm} skipped: suite budget")
+            continue
+        passed, total = counts(runs)
+        parts.append(f"{arm} {passed}/{total} ({arm_rate(runs):.2f})")
+    if "with" in arms and "without" in arms:
+        parts.append(f"delta {arm_rate(arms['with']) - arm_rate(arms['without']):+.2f}")
+    parts.append(f"${cost:.2f}")
+    return "  ".join(parts)
 
 
 def run_suite(cases, args):
@@ -313,18 +424,42 @@ def run_suite(cases, args):
     report = {"suite": suite, "claude_version": claude_version(claude),
               "model": args.model or DEFAULT_MODEL, "install_in_sync": not args.skip_install_check,
               "warnings": [], "cases": [], "totals": {}}
+    total_cost = 0.0
     for case in cases:
         report["warnings"] += case.warnings
-        entry = {"name": case.name, "tags": case.tags, "arms": {}}
+        if not case.graders:
+            report["warnings"].append(f"{case.name}: no graders; every run scores 0")
+        entry = {"name": case.name, "tags": case.tags, "arms": {}, "pass_rate": {}, "delta": None}
+        case_cost = 0.0
         for arm in arms_for(args.arm):
             entry["arms"][arm] = []
             for index in range(args.runs or case.runs):
                 result = execute_run(case, arm, index, args, claude, workspaces, hooks_brain)
+                result["graders"] = grade(case, result)
+                case_cost += result["cost_usd"]
                 entry["arms"][arm].append(public(result))
+            entry["pass_rate"][arm] = round(arm_rate(entry["arms"][arm]), 4)
+        if "with" in entry["arms"] and "without" in entry["arms"]:
+            entry["delta"] = round(entry["pass_rate"]["with"] - entry["pass_rate"]["without"], 4)
+        total_cost += case_cost
         report["cases"].append(entry)
-        print(f"{case.name:28}" + "  ".join(f"{arm} ran {len(runs)}" for arm, runs in entry["arms"].items()))
+        print(console_line(case.name, entry["arms"], case_cost))
+    suite_rates = {}
+    for arm in arms_for(args.arm):
+        rates = [c["pass_rate"][arm] for c in report["cases"] if arm in c["pass_rate"]]
+        suite_rates[arm] = round(sum(rates) / len(rates), 4) if rates else 0.0
+    delta = round(suite_rates["with"] - suite_rates["without"], 4) if len(suite_rates) == 2 else None
+    below = [c["name"] for c in report["cases"] if "with" in c["pass_rate"] and c["pass_rate"]["with"] < args.threshold]
+    code = 1 if below else 0
+    report["totals"] = {"pass_rate": suite_rates, "delta": delta, "cost_usd": round(total_cost, 4),
+                        "skipped": 0, "exit": code}
     (results_dir / "result.json").write_text(json.dumps(report, indent=2, default=list))
-    return 0
+    summary = "  ".join(f"{arm} {rate:.2f}" for arm, rate in suite_rates.items())
+    print(f"{'suite ' + suite:28}{summary}" + (f"  delta {delta:+.2f}" if delta is not None else "")
+          + f"  ${total_cost:.2f}  exit {code}")
+    if below:
+        print("below threshold: " + ", ".join(below))
+    return code
 
 
 if __name__ == "__main__":
