@@ -31,3 +31,8 @@ Sizes are planning estimates only; they never spend the iteration budget. Order:
 ## Notes / handoff
 - Child run R2 of the epic `2026-09-02-self-improving-gentic`. Brain consulted first (2 lessons,
   1 note recalled); three scouting facts noted into the brain under run `gentic-evals`.
+- Plan drift (Execute, task 9 preparation): the real `claude --help` (2.1.258) does not list
+  `--max-turns`, though the flag is accepted (smoke run: `num_turns: 1`), and the CLI ignores
+  unknown flags with `--version` (a bogus flag exits 0), so no acceptance probe exists. Preflight
+  keeps the help check for the other eight flags and exempts `--max-turns` with that evidence in
+  a comment; the E0 contract (refuse on a missing `--no-session-persistence`) is unchanged.

@@ -36,8 +36,11 @@ DEFAULT_SUITE_BUDGET = 21.0
 DEFAULT_MODEL = "sonnet"
 DEFAULT_TOOLS = ["Read", "Glob", "Grep", "Write", "Edit", "Bash"]
 
-# Every flag this runner emits; preflight refuses to launch if `claude --help` lacks one.
-REQUIRED_FLAGS = ("--output-format", "--verbose", "--max-turns", "--max-budget-usd",
+# Every flag this runner emits, minus one: preflight refuses to launch if `claude --help`
+# lacks any of these. `--max-turns` is emitted too but cannot be checked this way — Claude Code
+# 2.1.258 accepts it (a one-turn smoke run returned num_turns 1) while its --help never lists
+# it, and the CLI ignores unknown flags rather than rejecting them, so there is no cheaper probe.
+REQUIRED_FLAGS = ("--output-format", "--verbose", "--max-budget-usd",
                   "--permission-mode", "--allowedTools", "--no-session-persistence", "--model",
                   "--setting-sources")
 

@@ -24,7 +24,9 @@ REPO = HOOKS.parents[1]
 RUNNER = REPO / "evals" / "run.py"
 BRAIN = HOOKS / "lib" / "brain.py"
 
-FLAGS = ["--output-format", "--verbose", "--max-turns", "--max-budget-usd", "--permission-mode",
+# What the fake `claude --help` advertises. `--max-turns` is deliberately absent, as in the real
+# 2.1.258 help text: the runner must not require it there.
+FLAGS = ["--output-format", "--verbose", "--max-budget-usd", "--permission-mode",
          "--allowedTools", "--no-session-persistence", "--model", "--setting-sources"]
 
 FAKE_CLAUDE = r'''#!/usr/bin/env python3
