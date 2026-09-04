@@ -81,7 +81,7 @@ The costs grow super-linearly because each rung discards more prior work — and
 
 ## The agents
 
-Four subagents, each closing a gap the workflow had left to improvisation. All four are plain
+Five subagents, each closing a gap the workflow had left to improvisation. All five are plain
 markdown in [.claude/agents/](.claude/agents). None of the reviewing three is given an edit
 tool. `masterprompt-critic` is fully read-only (`Read, Grep, Glob`); `code-reviewer` and
 `dod-auditor` also get `Bash`, which they need to run `git diff` and to execute the checks a
@@ -95,10 +95,177 @@ pins each agent's declared tools so this claim and the frontmatter cannot drift 
 | [`dod-auditor`](.claude/agents/dod-auditor.md) | the Iterate phase, before any completion claim | Runs each Definition-of-Done check literally and returns PROVEN / FAILED / **UNVERIFIABLE**. It may never edit a DoD item to make it pass, and never rounds unverifiable up to proven. |
 | [`masterprompt-critic`](.claude/agents/masterprompt-critic.md) | the Masterprompt critique pass | Gets the spec and nothing else — no brief, no decisions, no conversation. That withheld context is the instrument: it occupies the position of the agent who executes this after a compaction. |
 | [`task-executor`](.claude/agents/task-executor.md) | Execute fan-out, on independent 3+ point tasks | Does one task test-first and returns a fixed evidence block. Refuses a vague assignment instead of guessing — it has no channel back to the user, so improvising is how a fan-out produces four readings of one spec. |
+| [`ui-tester`](.claude/agents/ui-tester.md) | a `ui` Definition-of-Done item, a UI failure to reproduce, or a product to inspect before changing it | Drives the real browser (Claude in Chrome first, the in-app Browser as fallback), files a half-scale screenshot under the run's `evidence/` directory, and reports what the screen showed — literally. It is given the page and the flow, never the spec. |
+
+`ui-tester` is the one agent whose tools are not pinned: it must inherit the browser tools, so
+its own text is what forbids it to edit.
 
 Review is no longer something you have to remember. When a session has changed code and no
 review has run, the Stop hook prints a one-line suggestion — advisory, never blocking, once per
 session. The verification gate stays the setup's only hard block.
+
+## The brain
+
+gentic remembers. One SQLite file, `~/.claude/gentic/brain.sqlite` (set `GENTIC_BRAIN` to put it
+elsewhere), holds what earlier runs learned, what the user has decided, and what the hooks saw —
+across every project on the machine, keyed by repository name. It is the agent's own memory, and
+it may use it as it likes:
+
+```bash
+python3 ~/.claude/hooks/lib/brain.py note calendar-dnd "drag and drop needs pointer events on touch"
+python3 ~/.claude/hooks/lib/brain.py recall pointer events
+python3 ~/.claude/hooks/lib/brain.py preference artifact-location     # exit 1 until learned
+python3 ~/.claude/hooks/lib/brain.py lessons
+python3 ~/.claude/hooks/lib/brain.py sql "select kind, count(*) from events group by kind"
+```
+
+| What it holds | Who writes it | Who reads it |
+|---------------|---------------|--------------|
+| `events` — every `red` and `verification` run, every gate block and nudge | the hooks, automatically, best-effort | you, via `sql`; later runs' tooling |
+| `decisions` and learned preferences | the Interview (`--source user`), the Masterprompt (`--source default`) | the Interview, before it asks |
+| `lessons` — what each spent rung taught, and *who caught it* | the Iterate phase | the Scout phase, before it explores |
+| `notes` with full-text recall | the agent, whenever something is worth keeping | the Scout phase; anyone |
+| `runs` and `stamps` — lifecycle and the sha256 of every skill a run used | the `gentic` skill | future evals, to tie a lesson to a skill version |
+
+The rules are the ones the rest of the setup already lives by. **A brain that is missing, locked
+or unwritable is invisible**: the hooks give up within a 34 ms lock timeout and print nothing,
+and the harness measures the writing hook against the same 150 ms budget as the others.
+**The user's memory is never a test fixture**: `run.sh` and every test point `GENTIC_BRAIN` at a
+throwaway file. **A preference is learned, not assumed**: the Interview adopts an answer only
+after the user has given it twice, the most recent user answer wins, and defaults never teach.
+
+`sql` is deliberately unrestricted — the agent may create its own tables. Before any `DROP`,
+`DELETE`, `UPDATE` or `ALTER` the file is copied to `brain.sqlite.bak`, one level of undo.
+Commands recorded as events have credentials scrubbed (`Authorization:`, `--password`,
+`token=`, `AWS_…=`); notes are not scrubbed, so never note a secret. There are no schema
+migrations: if a later version changes a table, delete the file or point `GENTIC_BRAIN` at a
+new one. SQLite's write-ahead log assumes a local disk — a home directory synced by iCloud or
+Dropbox is a known hazard; keep the brain out of synced folders.
+
+The [`gentic-brain`](.claude/skills/gentic-brain/SKILL.md) skill carries the full command set
+and says where each phase uses it.
+
+## The fitness function
+
+gentic can be scored. `evals/` holds five cases in the case layout that `claude plugin eval`
+documents for Claude Code 2.1.258 — `prompt.md` with frontmatter, `graders/*.md`, an optional
+`case.yaml` with a scaffold script — and `evals/run.py` runs them, because the official command
+is still early-access and disabled on ordinary accounts (the layout is honoured, the command
+itself is unverified here):
+
+```bash
+python3 evals/run.py --dry-run          # preflight, list cases and the exact claude argv, spend nothing
+python3 evals/run.py                    # both arms, one run per case, sonnet, budgets 5 / 21 USD
+python3 ~/.claude/hooks/lib/brain.py evals   # `brain evals`: the latest suite's numbers, from the brain
+```
+
+Every case runs twice, headlessly through `claude -p` in a fresh workspace: the **with** arm
+sees your installed setup exactly as you do; the **without** arm passes
+`--setting-sources project`, which loads no user skills, hooks or agents. The difference is
+the score. Graders are deterministic — `regex` over the final message or the created files,
+`file_exists` over files the agent created, `tool_used` over the transcript — so a number is
+reproducible and free to compute; only the sessions cost money, and they are capped at 5 USD
+per run and 21 USD per suite, checked before each launch. Nothing runs the suite unattended,
+and the hook harness never invokes it.
+
+| Case | What it measures |
+|------|------------------|
+| `csv-export-probe` | The README's own probe: a vague request against a small admin dashboard. Did a brief get written before code, and was exporting `password_hash` surfaced as a decision? |
+| `dod-auditor-false-claim` | A masterprompt claims two files exist; one does not. Does the auditor say FAILED? |
+| `critic-finds-contradiction` | Constraints forbid the network; a DoD item requires a download. Does the critic name that collision? |
+| `executor-refuses-vague` | "improve the code", no spec. Does the executor refuse instead of guessing? |
+| `reviewer-seeded-defect` | The seeded-defect fixture. Both planted defects found, the naming decoy not reported? |
+
+Scores land in two brain tables, `eval_runs` and `eval_graders`, next to the sha256 stamps of
+the installed skills and agents that produced them — so a change to a skill can be compared
+before and after. A `with` case below 1.0 is a finding about the workflow and becomes a brain
+`lesson`; the case is never loosened to pass. Results also go to `evals/results/<suite>/`
+(git-ignored) for humans: every run's raw `transcript.jsonl` and `stderr.txt` under `runs/`.
+Workspaces themselves live under the system temp directory, never inside this repository — a
+workspace inside the checkout would inherit its project root, and with it this repo's agents
+and skills, handing the "without" arm the very things it must lack.
+
+Three fidelity rules, each learned from the first live suite. A session that runs out of turns
+is **exhausted**, not failed: the CLI reports `error_max_turns` with no final message, so the
+runner grades what the session created and did and takes its last spoken text as the last
+message; the console and `brain evals` mark such an arm `exhausted`. The workflow case gets
+**89 turns** and every run a **5 USD** cap: gentic's Scout and Interview alone took 22 turns in
+the first suite, a 21-turn limit scored a written brief as nothing, and 55 turns finished a
+three-task feature twice with no headroom and then cut a third run off mid-Execute. Agent cases
+run three times (`runs: 3` in their frontmatter) because a single reply is noise, and their
+graders assert the shape each agent definition promises — the auditor's `UNVERIFIABLE` verdict
+and closing count, the critic's five named scans, the executor's `status:` line, the reviewer's
+`confidence <n>` and `Not reported` — rather than vocabulary a built-in agent also produces.
+
+## UI contracts
+
+A behaviour a person sees or clicks is a Definition-of-Done item like any other, with a
+contract that names its test:
+
+```markdown
+- [ ] Dragging an event to another day moves it
+      verify: `npx playwright test tests/e2e/calendar.spec.ts`
+      contract: ui · tests/e2e/calendar.spec.ts · test_drag_event_to_new_day ·
+                the event renders under the target day · expected RED: `locator not found`
+```
+
+The executable half is always the project's own e2e runner — Playwright, Cypress, whatever it
+already runs; the hooks count those runs as verification evidence. The browser is for evidence
+and exploration, not for the test: the `ui-tester` agent opens the flow in Claude in Chrome
+(fallback: the in-app Browser), files a half-scale screenshot under
+`docs/gentic/<run>/evidence/`, and reports what it saw. A project with no e2e runner gets a
+`ui-tester` verification instead, and the item is flagged `not reproducible in CI` so nobody
+mistakes the screenshot for a test. When the request touches a user-facing surface, Scout
+starts the app first, walks its routes, and puts a feature inventory with screenshots into the
+brief — questions asked from a screenshot are sharper than questions asked from `ls`. Never
+screenshot a production or authenticated surface or real personal data; fixture and seed data
+only.
+
+## The release lane
+
+`/ship` can continue past the pull request, but only as far as the project's grants allow, and
+every step past "watch" is a script's answer rather than an agent's memory:
+
+```bash
+python3 ~/.claude/hooks/lib/release.py checks --pr 12        # exit 0 green · 1 red · 2 pending · 3 no checks · 6 gh failed
+python3 ~/.claude/hooks/lib/release.py wait --pr 12          # polls every 21 s, up to 1597 s; exit 4 on timeout
+python3 ~/.claude/hooks/lib/release.py failed-logs --pr 12   # the failing jobs' last 89 lines
+python3 ~/.claude/hooks/lib/release.py merge --pr 12         # refuses unless granted, own repo, open, green
+```
+
+Red checks feed back as at most two rung-1 fixes per ship, each test-first with its own commit;
+a third failure stops with the logs in the report. `merge` is gated four ways — `merge-on-green`
+granted and the project trusted, the target repository is the checkout's own, the PR open and
+not conflicting, every check green — and is the one exception to `/ship`'s never-merge rule.
+`--through preview` deploys with the project's own mechanism and hands the URL to `ui-tester`;
+without a grant each step reports what it would have done. This repository's own CI is the
+offline hook harness on GitHub Actions (`.github/workflows/gentic.yml`), never the eval suite.
+
+## Standing authorizations
+
+A run never pushes and never opens a PR unless you have said so — once, durably, and in two
+places, because a clone must never be able to grant itself. In the project's root `CLAUDE.md`:
+
+```markdown
+## gentic authorizations
+- push
+- open-pr — CI is required on this repo, so a PR is safe to open
+```
+
+and on the machine, one git-root path per line in `~/.claude/gentic/trusted-projects`, a file
+only you write. The helper answers from both, and fails closed on anything missing:
+
+```bash
+python3 ~/.claude/hooks/lib/project_conventions.py authorized push      # yes / no, exit 0 / 1
+python3 ~/.claude/hooks/lib/project_conventions.py authorized --list    # granted and trusted words
+```
+
+Today only `push` and `open-pr` are consumed: a run whose project grants both ends its Iterate
+phase by following `/ship`'s own steps and reporting the PR URL. `merge-on-green`,
+`deploy-preview`, `use-workflow-tool` and `spawn-teams` are reserved words for the release lane
+and the orchestrator mesh. To halt a run from outside, create `docs/gentic/<run>/STOP` (or say
+`/gentic stop <slug>`): the next task or rung writes a handoff and ends; delete the file to
+resume. A hook also refuses a sixth concurrent foreground subagent per session.
 
 ## Install
 
@@ -173,7 +340,7 @@ claimed. `test_structure.py` exists so that class of defect cannot pass unnotice
 ```
 
 - New non-trivial task → gentic starts a run and interviews you (up to 4 multiple-choice questions per round, recommendation listed first).
-- You're away? Runs don't block: gentic adopts the scouted default for each question, flags it `unconfirmed`, and lists every assumption in the final report.
+- You're away, or the session is headless (`claude -p`, no `AskUserQuestion`)? Runs don't block and don't stop to flag: gentic adopts the scouted default for each question, flags it `unconfirmed`, continues through every phase, and lists every assumption in the final report.
 - `resume` / `continue` → gentic finds the newest unfinished run and re-enters at the first unchecked phase.
 - `/gentic status` → every run, its phase, tasks done, budget remaining.
 

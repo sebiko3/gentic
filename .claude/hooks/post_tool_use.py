@@ -3,7 +3,8 @@
 
 Records four things per turn: whether code (as opposed to prose) was edited, whether any of
 those edits was a test file, whether a recognised verification command succeeded, and whether
-one *failed*. `stop.py` reads the result.
+one *failed*. `stop.py` reads the result. The verification outcome is also appended to the
+brain as a `red` or `verification` event — best-effort, so a missing brain changes nothing.
 
 A failed verification run is the RED signal of test-first work, which is why it is kept rather
 than discarded: "the test failed before the code was written" is only observable here.
@@ -21,7 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib import common, token_efficiency  # noqa: E402
+from lib import brain, common, token_efficiency  # noqa: E402
 
 VERIFICATION = re.compile(
     r"\b("
@@ -32,6 +33,7 @@ VERIFICATION = re.compile(
     r"|make (test|check|lint|build)"
     r"|tsc|mypy|ruff|flake8|eslint|biome|pyright"
     r"|swift test|xcodebuild|gradle test|mvn (test|verify)|dotnet test|rspec|phpunit"
+    r"|playwright|cypress|lighthouse|axe"   # UI test runners and audits count too
     r")\b",
     re.I,
 )
@@ -86,6 +88,18 @@ def main():
         if subagent in REVIEW_AGENTS:
             state.setdefault("session", {})["reviewed"] = True
             changed = True
+        # A foreground subagent returned: free its slot in the concurrency valve (floor 0).
+        # Background spawns were never counted, so their return must not decrement either.
+        session_id = payload.get("session_id")
+        if session_id and not tool_input.get("run_in_background"):
+            with common.session_lock(session_id):
+                fresh = common.load_state(session_id)
+                fresh_session = fresh.setdefault("session", {})
+                fresh_session["agents_in_flight"] = max(0, int(fresh_session.get("agents_in_flight") or 0) - 1)
+                common.save_state(session_id, fresh)
+            state = common.load_turn_state(payload)
+            if subagent in REVIEW_AGENTS:
+                state.setdefault("session", {})["reviewed"] = True
 
     elif tool == "Bash":
         command = str(tool_input.get("command") or "")
@@ -96,10 +110,12 @@ def main():
             code = exit_code_of(payload)
             entry = {"command": command[:300], "exit_code": code, "ts": time.time()}
             # An unknown exit code counts as success evidence; a known failure is RED instead.
-            if code is None or code == 0:
+            kind = "verification" if code is None or code == 0 else "red"
+            if kind == "verification":
                 state["evidence"].append(entry)
             else:
                 state.setdefault("red", []).append(entry)
+            brain.record_event(payload.get("cwd"), payload.get("session_id"), kind, command)
             changed = True
 
     elif tool in ("Edit", "Write", "MultiEdit", "NotebookEdit"):

@@ -50,6 +50,19 @@ class InstallContract(unittest.TestCase):
         ):
             self.assertTrue((self.dest / rel).is_file(), f"{rel} not installed")
 
+    def test_source_list_includes_the_brain(self):
+        """The brain ships as three files; an installer that misses one leaves a phase skill
+        pointing at a CLI that is not there — the `ROUTING.md` orphan class again."""
+        result = run("--check", dest=self.dest)
+        for rel in ("hooks/lib/brain.py", "hooks/tests/test_brain.py", "skills/gentic-brain/SKILL.md"):
+            self.assertIn(rel, result.stdout, f"installer source list lacks {rel}")
+
+    def test_settings_block_matcher_covers_subagents(self):
+        """The concurrency valve lives in PreToolUse; a matcher without Task|Agent never runs it."""
+        result = run(dest=self.dest)
+        pre = next((line for line in result.stdout.splitlines() if '"PreToolUse"' in line), "")
+        self.assertIn("Task|Agent", pre, "printed PreToolUse matcher lacks the subagent tools")
+
     def test_run_sh_stays_executable(self):
         run(dest=self.dest)
         self.assertTrue(os.access(self.dest / "hooks/tests/run.sh", os.X_OK))

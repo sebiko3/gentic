@@ -202,5 +202,36 @@ class TddNudge(TddTestCase):
         self.assertNotIn("failing test", out.lower())
 
 
+class UiTestRunners(TddTestCase):
+    """Playwright, Cypress, Lighthouse and axe runs are verification like any other: a green
+    run is evidence for the Stop gate and a red one is the RED of a UI test contract."""
+
+    def bash(self, command, exit_code, session=None):
+        return run(POST, {
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": command},
+            "tool_output": {"exit_code": exit_code},
+            "session_id": session or self.session,
+            "prompt_id": self.prompt_id,
+        }, self.state)
+
+    def state_of(self, session):
+        path = Path(self.state) / f"{session}.json"
+        return json.loads(path.read_text()) if path.exists() else {}
+
+    def test_ui_test_runners_are_verification_commands(self):
+        for command in ("npx playwright test", "cypress run --e2e", "lighthouse http://localhost:3000 --quiet",
+                        "npx @axe-core/cli http://localhost:3000"):
+            with self.subTest(command=command):
+                session = self.new_session()
+                self.bash(command, 0, session=session)
+                evidence = self.state_of(session).get("evidence", [])
+                self.assertNotEqual(evidence, [], f"{command.split()[0]} run was not recorded as evidence")
+        session = self.new_session()
+        self.bash("npx playwright test", 1, session=session)
+        self.assertNotEqual(self.state_of(session).get("red", []), [], "a failing playwright run was not recorded as RED")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

@@ -172,6 +172,34 @@ def bare_cat_guard(payload, command, cwd):
         common.block(reason)
 
 
+SUBAGENT_TOOLS = {"Task", "Agent"}
+MAX_IN_FLIGHT = 5   # Fibonacci; runaway fan-out is how a run burns its budget without converging
+
+FAN_OUT = ("Five subagents are already in flight. Wait for one to return before spawning another "
+           "— runaway fan-out is how a run burns its budget without converging.")
+
+
+def concurrency_valve(payload, tool_input):
+    """Deny a sixth concurrent foreground subagent. A cap, not a once-only valve.
+
+    Background spawns return immediately and are not counted. The counter is a session fact,
+    locked against parallel hook processes and reset at every user prompt.
+    """
+    if tool_input.get("run_in_background"):
+        return None
+    session_id = payload.get("session_id")
+    if not session_id:
+        return None
+    with common.session_lock(session_id):
+        state = common.load_state(session_id)
+        session = state.setdefault("session", {})
+        if int(session.get("agents_in_flight") or 0) >= MAX_IN_FLIGHT:
+            return deny(FAN_OUT)
+        session["agents_in_flight"] = int(session.get("agents_in_flight") or 0) + 1
+        common.save_state(session_id, state)
+    return None
+
+
 def deny(reason):
     common.emit({
         "hookSpecificOutput": {
@@ -279,6 +307,9 @@ def main():
         if tool == "Read":
             return duplicate_read_guard(payload, tool_input, cwd)
         return None
+
+    if tool in SUBAGENT_TOOLS:
+        return concurrency_valve(payload, tool_input)
 
     if tool != "Bash":
         return

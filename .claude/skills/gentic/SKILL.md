@@ -31,6 +31,8 @@ convention via `project_conventions.py`; never push, never open a PR).
 1. Derive a short kebab-case slug from the request (e.g. `add-user-auth`).
 2. Create the run directory: `docs/gentic/<YYYY-MM-DD>-<slug>/` (today's date).
 3. Write `progress.md` in it from the template below.
+   Open the run in the brain (`gentic-brain`): `python3 "$HOME/.claude/hooks/lib/brain.py" run start <slug> --goal "<goal>"`,
+   then `stamp <slug>` the skill and agent files this run will use.
 4. Invoke `gentic-scout` with the Skill tool. Follow each phase skill exactly.
 5. Between phases: verify the gate from the table above, tick the phase box in `progress.md`, commit the run directory (subject from `project_conventions.py commit`: `gentic(<slug>): <phase> gate` in an adopted repo, `<phase> gate` elsewhere), then invoke the next phase's skill. During Execute, progress ticks ride inside each task's checkpoint commit instead. After Execute, `gentic-iterate` owns control flow until the run is done or stopped — it may re-enter earlier phases via its escalation ladder.
 
@@ -44,6 +46,14 @@ convention via `project_conventions.py`; never push, never open a PR).
 ## Status request
 
 Read all `docs/gentic/*/progress.md`, report each run's goal, current phase, tasks done/total, budget remaining, and any handoff note. No other action.
+
+## Stop request
+
+`/gentic stop <slug> [reason]` — handled by this skill like a status request, no command file —
+writes `docs/gentic/<run>/STOP` containing the reason (default `stopped by user`).
+`gentic-execute` checks for it before every task and `gentic-iterate` before every rung; a
+stopped run writes its handoff and ends the turn. Status lists such a run as `stopped`. The
+file is untracked and never committed; nothing deletes it but the user. Delete it to resume.
 
 ## progress.md template
 
@@ -70,9 +80,18 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 ## Notes / handoff
 ```
 
+## Autonomous runs
+
+When `AskUserQuestion` is unavailable the run is autonomous. Every phase gate is then crossed in
+the same session without pausing for confirmation, defaults are adopted and flagged
+`default — unconfirmed`, and the only legitimate stops are rung 5, rung 8, budget exhaustion, or
+a blocker no default can resolve. Ending a turn to "flag" or to "let the user object" is a stop,
+and it is the failure the fitness suite measures (`csv-export-probe`).
+
 ## Red flags — stop and re-read this skill
 
 - "This part seems clear enough, I'll skip Interview" — routing decides *whether* gentic runs (see CLAUDE.md); once it runs, every phase runs. Phases may be *short*, never absent.
 - "I'll fix the artifact by hand" — if a gate fails, re-run the phase skill; artifacts are outputs of phases, not scratch files.
 - "I remember the context, no need to re-read artifacts" — after resume or compaction, memory is the thing that failed. Artifacts are the source of truth.
 - Starting a second goal inside an existing run — one run directory per goal; new goal, new run.
+- "I'll proceed unless you object" — in an autonomous run there is nobody to object; continue, and put the flag in the report.

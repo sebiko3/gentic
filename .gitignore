@@ -1,2 +1,5 @@
 __pycache__/
 *.pyc
+
+# eval suite output: workspaces, transcripts, the eval sessions' own brain
+evals/results/

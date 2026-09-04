@@ -50,6 +50,9 @@ a fan-out produces four incompatible interpretations of the same spec.
 ## Output
 
 Your final message is consumed by another agent, not read by a person. Be terse and literal.
+**The block below is your entire final message — nothing before it, nothing after it — for
+every status, including `blocked` and `assignment unclear`.** A question you would have asked
+goes in `blocker:`; the caller cannot answer it either, and reads only the block.
 
 ```
 status: done | blocked | assignment unclear

@@ -6,12 +6,16 @@ set -uo pipefail
 HOOKS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FAILURES=0
 
+# The brain is machine-wide state under $HOME. Every hook run below gets a throwaway one, so
+# the harness can never write into the user's real memory.
+export GENTIC_BRAIN="$(mktemp -d)/brain.sqlite"
+
 section() { printf '\n\033[1m%s\033[0m\n' "$1"; }
 pass() { printf '  ok    %s\n' "$1"; }
 fail() { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; FAILURES=$((FAILURES + 1)); }
 
 section "Unit and contract suites"
-for suite in test_lib test_classifier test_gate test_tdd test_token_efficiency test_guard_and_session test_agentignore test_install test_structure test_review_nudge test_destructive_guard test_project_conventions; do
+for suite in test_lib test_classifier test_gate test_tdd test_token_efficiency test_guard_and_session test_agentignore test_install test_structure test_review_nudge test_destructive_guard test_project_conventions test_brain test_evals test_release; do
   if out=$(cd "$HOOKS" && python3 "tests/$suite.py" 2>&1); then
     pass "$suite ($(printf '%s' "$out" | grep -oE 'Ran [0-9]+ tests' | head -1))"
   else
@@ -84,6 +88,25 @@ PY
 )
 if awk "BEGIN{exit !($PRE_MEDIAN < 150)}"; then pass "median ${PRE_MEDIAN}ms < 150ms"; else fail "median ${PRE_MEDIAN}ms exceeds 150ms"; fi
 
+section "Latency budget (PostToolUse with a brain write, median of 20)"
+POST_MEDIAN=$(cd "$HOOKS" && python3 - <<'PY'
+import json, statistics, subprocess, sys, tempfile, time
+from pathlib import Path
+root = tempfile.mkdtemp()
+(Path(root) / ".git").mkdir()
+payload = json.dumps({"hook_event_name": "PostToolUse", "tool_name": "Bash",
+                      "tool_input": {"command": "pytest tests/ -x"}, "tool_output": {"exit_code": 1},
+                      "cwd": root, "session_id": "bench"})
+times = []
+for _ in range(20):
+    start = time.perf_counter()
+    subprocess.run([sys.executable, "post_tool_use.py"], input=payload, capture_output=True, text=True)
+    times.append((time.perf_counter() - start) * 1000)
+print(f"{statistics.median(times):.1f}")
+PY
+)
+if awk "BEGIN{exit !($POST_MEDIAN < 150)}"; then pass "median ${POST_MEDIAN}ms < 150ms"; else fail "median ${POST_MEDIAN}ms exceeds 150ms"; fi
+
 section "Isolation: hooks never write into a project's .claude directory"
 # Only quoted path literals count; prose mentions of ~/.claude in docstrings are not paths.
 OFFENDERS=$(grep -rnE '"[^"]*\.claude[^"]*"' "$HOOKS"/*.py "$HOOKS"/lib/*.py \
@@ -114,11 +137,11 @@ else
 
   MATCHER=$(jq -r '.hooks.PreToolUse[0].matcher' "$SETTINGS" 2>/dev/null)
   MISSING=""
-  for tool in Bash Read Edit Write; do
+  for tool in Bash Read Edit Write Task; do
     case "$MATCHER" in *"$tool"*) ;; *) MISSING="$MISSING $tool";; esac
   done
   if [ -z "$MISSING" ]; then
-    pass "PreToolUse matcher covers Bash/Read/Edit/Write"
+    pass "PreToolUse matcher covers Bash/Read/Edit/Write/Task"
   else
     fail "PreToolUse matcher missing:$MISSING"
   fi
@@ -144,10 +167,10 @@ if grep -qi 'not a security boundary' "$HOOKS/README.md"; then
 else
   fail "README does not state the .agentignore limitation"
 fi
-if [ "$(ls "$HOOKS/../skills"/gentic*/SKILL.md 2>/dev/null | wc -l | tr -d ' ')" = "7" ]; then
-  pass "7 gentic skills present in the repo"
+if [ "$(ls "$HOOKS/../skills"/gentic*/SKILL.md 2>/dev/null | wc -l | tr -d ' ')" = "8" ]; then
+  pass "8 gentic skills present in the repo"
 else
-  fail "expected 7 gentic skills in the repo"
+  fail "expected 8 gentic skills in the repo"
 fi
 
 section "Result"

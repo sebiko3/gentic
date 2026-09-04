@@ -13,12 +13,15 @@ Iterate proves the run against its Definition of Done and, when items fail, choo
 
 ## Verification
 
-1. Run **every** DoD check literally — the exact command or inspection the masterprompt names. No sampling, no "the others will pass too". Dispatch `dod-auditor` with the masterprompt path to do this adversarially: it runs each named check and returns PROVEN / FAILED / UNVERIFIABLE with the real output, and it treats UNVERIFIABLE as a non-pass rather than rounding it up. Where that agent is unavailable, run the checks yourself under the same rule.
+1. Run **every** DoD check literally — the exact command or inspection the masterprompt names. No sampling, no "the others will pass too". Dispatch `dod-auditor` with the masterprompt path to do this adversarially: it runs each named check and returns PROVEN / FAILED / UNVERIFIABLE with the real output, and it treats UNVERIFIABLE as a non-pass rather than rounding it up. Where that agent is unavailable, run the checks yourself under the same rule. A `ui` item has two halves: `dod-auditor` runs its e2e command; `ui-tester` opens the flow and files a screenshot under `docs/gentic/<run>/evidence/` — both go in the evidence column. An item flagged `not reproducible in CI` has only the second half and is reported as such.
 2. Record each result in the iteration log with a one-line evidence summary (command + outcome). Passing checks log Rung `—`, Points 0.
 3. Editing a DoD item to make it pass is forbidden. DoD changes happen only via rung 5.
 4. All items pass → if superpowers:verification-before-completion is available, invoke it as the final gate (otherwise re-run every DoD check once more, fresh, quoting outputs); then write the final report (below).
 
 ## On failure: diagnose, then pick a rung
+
+Before any rung, if `docs/gentic/<run>/STOP` exists, write the handoff into `progress.md` and
+stop — the file was put there from outside the run.
 
 Direct rung-5 entry: when gentic-execute's drift rule sends the run here mid-Execute, skip Verification and start at rung 5.
 
@@ -39,13 +42,25 @@ Costs are fibonacci because each rung discards more prior work; the default budg
 - **The initial verification failure is not an attempt; fixes are.** Each fix attempt starts a rung and deducts that rung's points anew from the budget line in `progress.md`, logged: item, rung, points, result.
 - **Same DoD item fails two fix attempts at the same rung → the next rung is mandatory.** No third attempt at a level — and "next" is a floor: the diagnosis may justify jumping higher, never staying. "One more quick try" is the loop this skill exists to break.
 - A mandated rung costing more than the remaining budget = budget exhausted: stop and hand off.
+- Every rung spent is a lesson for the brain (`gentic-brain`):
+  `lesson --item <DoD item> --rung <n> --points <n> --caught-by <suite|live|review|critic|auditor|user> --cause "<root cause>"`.
 - Commit rung work like tasks, with the subject from `project_conventions.py commit` — `gentic(<slug>): rung-<n> <DoD item>` in an adopted repo, `rung-<n> <DoD item>` in any other project.
 - Rungs 5 and 8 are user check-ins. If the session is autonomous, do not silently rewrite the spec — stop and hand off instead. (A rung you stop at instead of starting deducts nothing and gets the same handoff as budget exhaustion.)
 - Budget exhausted → stop. Write an honest handoff in `progress.md` (what passes, what fails, root-cause state, recommended next rung) and report to the user. A stopped run with a clean handoff beats a thrashed one.
 
 ## Final report (all DoD green)
 
-Append the report to `progress.md` (Notes / handoff) and tick phase 5, then report to the user: mission, each DoD item with its evidence, unconfirmed defaults awaiting confirmation, points spent, and anything deliberately not done (non-goals). If superpowers:finishing-a-development-branch is available, invoke it to close out the branch.
+Append the report to `progress.md` (Notes / handoff) and tick phase 5, then report to the user: mission, each DoD item with its evidence, unconfirmed defaults awaiting confirmation, points spent, and anything deliberately not done (non-goals). Then commit the final-report edit to `progress.md` as the last checkpoint commit. Ask the
+project: if `python3 "$HOME/.claude/hooks/lib/project_conventions.py" authorized push` and
+`… authorized open-pr` both print `yes`, follow `$HOME/.claude/commands/ship.md` steps 1–4 and 6
+(preconditions, branch guard, verify, review, push, PR); skip its commit step, skip
+`dod-auditor` in its review because it just ran, record any review finding in the PR body
+rather than as a rung, and put the PR URL in the report. If either prints `no`, the report says
+what `/ship` would do and stops there; then invoke superpowers:finishing-a-development-branch if it is available,
+to close out the branch. When `push` and `open-pr` were granted and the PR is open, continue with
+`ship.md` §8 as far as the grants allow: `--through ci` always, `preview` and `merge` only when
+`authorized deploy-preview` / `authorized merge-on-green` print `yes`.
+Close the run in the brain: `run finish <slug> --outcome done` (a handoff uses `--outcome stopped`).
 
 ## Red flags — stop and re-read this skill
 

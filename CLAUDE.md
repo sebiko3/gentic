@@ -24,6 +24,13 @@ At session start, if the user references past work, check `docs/gentic/*/progres
 - Every task goes through `gentic-tdd`: the test comes first, its observed failure goes in the task's `RED` cell, and a task with an empty `RED` cell is not done.
 - Any decision the user didn't personally make — silent defaults included — is flagged `default — unconfirmed` and surfaced in the final report.
 
+## gentic authorizations
+
+Standing permissions a run may use without asking again, honoured only when this repository's
+path is also in the machine's `~/.claude/gentic/trusted-projects`. Words: `push`, `open-pr`,
+`merge-on-green`, `deploy-preview`, `use-workflow-tool`, `spawn-teams`. This repository grants
+none; `/ship` is typed by hand here.
+
 ## Test-first spine
 
 The spec designs the tests and the tests gate the work — the two halves are one mechanism:

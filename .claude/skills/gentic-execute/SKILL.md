@@ -20,6 +20,8 @@ Execute turns the masterprompt into a task plan, then delivers it one verified, 
 
 ## Per-task loop
 
+0. **Check for `STOP`.** If `docs/gentic/<run>/STOP` exists, write the handoff into
+   `progress.md` and end the turn; do not start the task.
 1. **Invoke `gentic-tdd` and follow it.** It carries the Iron Law — no production code without a failing test first — and the rules for tasks with no executable behaviour. Every task goes through it; there is no fast path for small ones.
 2. Take the task's test from the masterprompt: the DoD item it serves already names the test file, the test name and the failure to expect. If reality contradicts that contract, that is drift — see below.
 3. Watch the test fail, and **paste the actual failure into the task's `RED` cell** in `progress.md`. A trimmed assertion message is enough; invented text is not.
@@ -31,6 +33,9 @@ Execute turns the masterprompt into a task plan, then delivers it one verified, 
 ## When blocked on a missing decision
 
 Never improvise silently. If interactive: a single AskUserQuestion call (a mini-interview — gentic-interview's question-craft rules apply, but one call, not the round system). If autonomous: adopt the most conservative option consistent with the masterprompt, append it to `decisions.md` as `default — unconfirmed`, and continue.
+
+A blocker, a surprise, or a number that was hard to find is worth a `note` in the brain
+(`gentic-brain`) — the next run in this project will `recall` it before scouting.
 
 ## Drift rule
 

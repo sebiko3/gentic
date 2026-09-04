@@ -96,7 +96,7 @@ your settings.json (merging with what is already there):
     "SessionStart":    [{"matcher": "startup|resume",
                          "hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/session_start.py\"",   "timeout": 10}]}],
     "UserPromptSubmit":[{"hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/user_prompt_submit.py\"", "timeout": 5}]}],
-    "PreToolUse":      [{"matcher": "Bash|Read|Edit|Write|MultiEdit|NotebookEdit|NotebookRead",
+    "PreToolUse":      [{"matcher": "Bash|Read|Edit|Write|MultiEdit|NotebookEdit|NotebookRead|Task|Agent",
                          "hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/pre_tool_use.py\"",   "timeout": 5}]}],
     "PostToolUse":     [{"matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit|Task|Agent",
                          "hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/post_tool_use.py\"",  "timeout": 5}]}],

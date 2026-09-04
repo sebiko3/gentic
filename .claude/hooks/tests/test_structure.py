@@ -20,7 +20,7 @@ REPO = Path(__file__).resolve().parents[3]
 CLAUDE = REPO / ".claude"
 AGENTS = CLAUDE / "agents"
 
-EXPECTED_AGENTS = {"code-reviewer", "dod-auditor", "masterprompt-critic", "task-executor"}
+EXPECTED_AGENTS = {"code-reviewer", "dod-auditor", "masterprompt-critic", "task-executor", "ui-tester"}
 
 # The optional review plugin this setup deliberately does not depend on, and the agents it
 # ships. Naming any of them without marking them optional is the exact bug this suite guards.
@@ -48,7 +48,7 @@ SUPERPOWERS_REF = re.compile(r"superpowers:([a-z][a-z0-9-]*)")
 SLASH_COMMAND = re.compile(r"(?:^|(?<=[\s`(]))/([a-z][a-z0-9-]{2,})(?![\w/.-])")
 HOOK_PATH = re.compile(r"hooks/([a-z_]+\.py)")
 # Only the phase skills. `gentic-runs` is a directory in the fallback artifact path, not a skill.
-GENTIC_SKILL = re.compile(r"\b(gentic-(?:scout|interview|masterprompt|execute|iterate|tdd))\b")
+GENTIC_SKILL = re.compile(r"\b(gentic-(?:scout|interview|masterprompt|execute|iterate|tdd|brain))\b")
 
 
 def frontmatter(path):
@@ -337,6 +337,168 @@ class TestFirstSpine(unittest.TestCase):
                 body = (REPO / name).read_text(encoding="utf-8")
                 self.assertIn("gentic-tdd", body, f"{name} does not mention gentic-tdd")
                 self.assertRegex(body, r"(?i)\bRED\b", f"{name} does not mention RED evidence")
+
+
+class BrainWiring(unittest.TestCase):
+    """The brain is only memory if the phases actually consult it.
+
+    A `gentic-brain` skill that nothing invokes is the `ROUTING.md` defect again: shipped,
+    installed, invisible. Every phase that has something to remember or recall must name it.
+    """
+
+    PHASES_THAT_REMEMBER = (
+        "gentic", "gentic-scout", "gentic-interview", "gentic-masterprompt",
+        "gentic-execute", "gentic-iterate",
+    )
+
+    def test_brain_skill_is_wired_into_the_phases(self):
+        skill = CLAUDE / "skills" / "gentic-brain" / "SKILL.md"
+        self.assertTrue(skill.is_file(), "skills/gentic-brain/SKILL.md missing")
+        fields = frontmatter(skill)
+        self.assertEqual(fields.get("name"), "gentic-brain")
+        description = fields.get("description", "")
+        self.assertTrue(description.startswith("Use when"), "description is not trigger-style")
+        named = sum(1 for word in ("note", "recall", "decide", "lesson") if word in description)
+        self.assertGreaterEqual(named, 2, "description names fewer than two brain verbs")
+        for name in self.PHASES_THAT_REMEMBER:
+            body = (CLAUDE / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
+            self.assertIn("gentic-brain", body, f"{name} does not mention gentic-brain")
+        self.assertRegex("gentic-brain", GENTIC_SKILL, "GENTIC_SKILL does not cover gentic-brain")
+        run_sh = (CLAUDE / "hooks" / "tests" / "run.sh").read_text(encoding="utf-8")
+        self.assertIn('= "8"', run_sh, "run.sh does not expect 8 gentic skills")
+
+
+class AutonomousRuns(unittest.TestCase):
+    """The fitness suite showed a headless run stopping at the Interview to "flag" defaults and
+    the executor answering in prose. The rules that prevent both live in the wording below."""
+
+    def lowered(self, rel):
+        return (REPO / rel).read_text(encoding="utf-8").lower()
+
+    def test_interview_continues_when_no_question_can_be_asked(self):
+        body = self.lowered(".claude/skills/gentic-interview/SKILL.md")
+        for needle in ('`askuserquestion` is unavailable', 'never end the turn', 'return to the orchestrator'):
+            self.assertIn(needle, body)
+
+    def test_orchestrator_has_an_autonomous_runs_section(self):
+        body = self.lowered(".claude/skills/gentic/SKILL.md")
+        self.assertIn('## autonomous runs', body)
+        self.assertIn('nobody to object', body)
+
+    def test_executor_block_is_the_entire_message(self):
+        body = self.lowered(".claude/agents/task-executor.md")
+        output = body[body.index('## output'):]
+        self.assertIn('entire final message', output)
+        self.assertIn('assignment unclear', output)
+
+    def test_readme_says_headless_runs_continue(self):
+        body = self.lowered("README.md")
+        self.assertIn('no `askuserquestion`', body)
+        self.assertIn("don't stop to flag", body)
+
+
+class StandingAuthorizations(unittest.TestCase):
+    """A grant in CLAUDE.md plus a machine-side trust file let a run push and open a PR; a STOP
+    file halts it; a valve caps fan-out. Each rule lives in wording that must stay in place."""
+
+    def lowered(self, rel):
+        return (REPO / rel).read_text(encoding="utf-8").lower()
+
+    def test_routing_names_the_grant_and_the_helper(self):
+        body = self.lowered(".claude/skills/gentic/ROUTING.md")
+        self.assertIn("## gentic authorizations", body)
+        self.assertIn("authorized push", body)
+
+    def test_iterate_consumes_the_grant_and_checks_stop(self):
+        body = self.lowered(".claude/skills/gentic-iterate/SKILL.md")
+        self.assertIn("authorized open-pr", body)
+        self.assertIn("ship.md", body)
+        self.assertIn("docs/gentic/<run>/stop", body)
+
+    def test_ship_admits_the_second_caller(self):
+        self.assertIn("trusted-projects", self.lowered(".claude/commands/ship.md"))
+
+    def test_execute_checks_stop_before_each_task(self):
+        self.assertIn("check for `stop`", self.lowered(".claude/skills/gentic-execute/SKILL.md"))
+
+    def test_orchestrator_has_a_stop_request(self):
+        self.assertIn("## stop request", self.lowered(".claude/skills/gentic/SKILL.md"))
+
+    def test_this_repo_declares_its_authorizations(self):
+        self.assertIn("## gentic authorizations", self.lowered("CLAUDE.md"))
+
+    def test_readme_documents_authorizations_and_trust(self):
+        body = self.lowered("README.md")
+        self.assertIn("## standing authorizations", body)
+        self.assertIn("trusted-projects", body)
+
+    def test_hooks_readme_documents_the_valve(self):
+        body = self.lowered(".claude/hooks/README.md")
+        self.assertIn("in flight", body)
+        self.assertIn("run_in_background", body)
+
+
+class UiContracts(unittest.TestCase):
+    """A UI flow is a Definition-of-Done contract with an e2e runner as its executable half,
+    a ui-tester agent files screenshots as evidence, and Scout walks a runnable product."""
+
+    def lowered(self, rel):
+        return (REPO / rel).read_text(encoding="utf-8").lower()
+
+    def test_ui_grammar_in_masterprompt(self):
+        body = self.lowered(".claude/skills/gentic-masterprompt/SKILL.md")
+        self.assertIn("contract: ui ·", body)
+        self.assertIn("not reproducible in ci", body)
+
+    def test_ui_tdd_names_ui_tasks(self):
+        self.assertIn("## ui tasks", self.lowered(".claude/skills/gentic-tdd/SKILL.md"))
+
+    def test_ui_scout_walks_the_product(self):
+        body = self.lowered(".claude/skills/gentic-scout/SKILL.md")
+        for needle in ("runnable product variant", "feature inventory", "user-facing surface"):
+            self.assertIn(needle, body)
+
+    def test_ui_iterate_dispatches_the_tester(self):
+        self.assertIn("ui-tester", self.lowered(".claude/skills/gentic-iterate/SKILL.md"))
+
+    def test_ui_agent_is_defined(self):
+        path = AGENTS / "ui-tester.md"
+        self.assertTrue(path.is_file(), "ui-tester.md missing")
+        fields = frontmatter(path)
+        self.assertEqual(fields.get("name"), "ui-tester")
+        self.assertTrue(fields.get("description", "").startswith("Use when"), "description is not trigger-style")
+        self.assertNotIn("tools", fields, "ui-tester must inherit the browser tools; no tools: line")
+        body = path.read_text(encoding="utf-8").lower()
+        for needle in ("claude-in-chrome", "claude_browser", "save_to_disk", "never", "personal data"):
+            self.assertIn(needle, body)
+
+    def test_ui_readme_documents_contracts(self):
+        body = self.lowered("README.md")
+        for needle in ("## ui contracts", "ui-tester", "five subagents"):
+            self.assertIn(needle, body)
+
+
+class ReleaseLane(unittest.TestCase):
+    """/ship may continue past the PR only as far as the project's grants allow; the words
+    that say so must stay in place."""
+
+    def lowered(self, rel):
+        return (REPO / rel).read_text(encoding="utf-8").lower()
+
+    def test_ship_has_a_through_section(self):
+        body = self.lowered(".claude/commands/ship.md")
+        for needle in ("--through", "release.py", "merge-on-green", "deploy-preview", "at most two",
+                       "what it would have done", "never merge the pr yourself"):
+            self.assertIn(needle, body)
+        self.assertLess(body.index("## 8."), body.index("## 7."), "section 8 must sit before section 7")
+
+    def test_iterate_ships_through_grants(self):
+        self.assertIn("--through", self.lowered(".claude/skills/gentic-iterate/SKILL.md"))
+
+    def test_readme_documents_the_release_lane(self):
+        body = self.lowered("README.md")
+        self.assertIn("## the release lane", body)
+        self.assertIn("release.py", body)
 
 
 class NoOrphanedSkillFiles(unittest.TestCase):

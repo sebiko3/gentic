@@ -71,6 +71,13 @@ is the pattern).
 Only a task that changes **nothing observable** may write `n/a` in the `Test` cell, and it must say
 why in the same cell. "Hard to test" is not a reason; it is a design signal.
 
+## UI tasks
+
+A `ui` contract is RED when the e2e spec fails against the running app with the failure the
+contract predicted (a missing locator, a wrong text), and GREEN when it passes; paste the RED
+like any other. When the item is flagged `not reproducible in CI`, the RED and the GREEN are two
+`ui-tester` reports with screenshots in `docs/gentic/<run>/evidence/`, and the task note says so.
+
 ## When the test is hard to write
 
 | Symptom | What it means |

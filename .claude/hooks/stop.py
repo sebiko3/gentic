@@ -20,6 +20,9 @@ The gate fires when all of the following hold:
 
 Condition 4 is the safety property: the gate blocks at most once per prompt, so a false
 positive costs one extra turn and can never trap the user in a loop.
+
+Every block and every nudge is also appended to the brain as an event (`gate_block`,
+`nudge_tdd`, `nudge_review`, `nudge_spend`), best-effort: the brain never delays the block.
 """
 
 import re
@@ -28,7 +31,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib import common, token_efficiency  # noqa: E402
+from lib import brain, common, token_efficiency  # noqa: E402
 
 DONE_CLAIM = re.compile(
     r"\b("
@@ -118,12 +121,16 @@ def advisory_nudges(payload, state):
     touched = state.get("touched", [])
     parts = []
 
+    kinds = []
+
     if tdd_applies(state):
         session["tdd_nudge_shown"] = True
         parts.append(TDD_NUDGE.format(n=len(touched), files=named(touched)))
+        kinds.append("nudge_tdd")
     if review_applies(state):
         session["review_nudge_shown"] = True
         parts.append(NUDGE.format(n=len(touched), files=named(touched)))
+        kinds.append("nudge_review")
     if spend_report_applies(state):
         session["spend_reported"] = True
         parts.append(SPEND_REPORT.format(
@@ -133,9 +140,12 @@ def advisory_nudges(payload, state):
             repeats=session.get("bash_repeats", 0),
             saved=session.get("spend_saved", 0) // 1000,
         ))
+        kinds.append("nudge_spend")
 
     if not parts:
         return
+    for kind, text in zip(kinds, parts):
+        brain.record_event(payload.get("cwd"), payload.get("session_id"), kind, text)
     common.save_state(payload.get("session_id"), state)
     common.emit_message("\n\n".join(parts))
 
@@ -156,7 +166,9 @@ def verification_gate(payload, state, message):
     common.save_state(payload.get("session_id"), state)
 
     touched = state.get("touched", [])
-    common.block(REASON.format(n=len(touched), files=named(touched)))
+    reason = REASON.format(n=len(touched), files=named(touched))
+    brain.record_event(payload.get("cwd"), payload.get("session_id"), "gate_block", reason)
+    common.block(reason)
 
 
 def main():
