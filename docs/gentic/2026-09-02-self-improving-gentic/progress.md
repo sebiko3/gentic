@@ -17,7 +17,7 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 | R3 | child run `2026-09-02-eval-fidelity` (re-scoped from adjective-compiler-and-retro; that work moves to R4+) | 5 | R2 | its own DoD | see child (9/10 proven, F8 in substance; first trustworthy score 0.92 vs 0.35) | done |
 | R4 | child run `2026-09-02-skill-tuning-by-evals` (inserted by R3's findings; standing-authorizations becomes R5) | 3 | R3 | its own DoD | see child (9/9 proven; with 1.00 / without 0.20) | done |
 | R5 | child run `2026-09-02-standing-authorizations` | 5 | R4 | its own DoD | see child (7/7 proven; regression 4/4) | done |
-| R5b | child run `ui-contracts` | 8 | R2 | its own DoD | — | pending |
+| R6 | child run `2026-09-02-ui-contracts` | 8 | R2 | its own DoD | see child (7/8 proven; U8 closed unproven by the user) | done |
 | R6 | child run `release-lane` | 8 | R4 | its own DoD | — | pending |
 | R7 | child run `gentic-epic` | 8 | R3, R4, R5 | its own DoD | — | pending |
 | R8 | child run `orchestrator-mesh` | 8 | R1, R7 | its own DoD | — | pending |
@@ -44,3 +44,4 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 - 2026-09-02: R4 `skill-tuning-by-evals` complete — the first evidence-driven change to gentic itself, proven by the suite (with 1.00, without 0.20). Remaining roadmap: standing-authorizations, ui-contracts, release-lane, gentic-epic, orchestrator-mesh, gardener, then the adjective compiler and retro.
 - 2026-09-02: R5 `standing-authorizations` complete — grants in CLAUDE.md plus a machine-side trust file; runs may push and open PRs only when both hold; valve at 5 subagents; STOP file. Next: `ui-contracts`, then `release-lane` (the first real push under a grant).
 - 2026-09-02: R6 `ui-contracts` — U1–U7 proven (grammar, TDD, Scout variant, Iterate, ui-tester agent, README, harness, live browser dispatch with evidence); U8's regression gate failed twice on harness limits (55-turn exhaustion, then a 900 s timeout), both fixed; a third billed run awaits the user.
+- 2026-09-02: R6 closed by the user with U8 unproven. Next: `release-lane` (the first real push under a grant, CI watched, preview deploy), then `gentic-epic`, `orchestrator-mesh`, `gardener`, `adjective-compiler-and-retro`. PR #2 is open for everything so far.

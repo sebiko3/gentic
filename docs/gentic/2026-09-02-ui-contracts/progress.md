@@ -6,8 +6,8 @@ Iteration budget: 9 remaining (4 spent: rung 1 on U7, rung 1 then rung 2 on U8) 
 - [x] 1 Scout
 - [x] 2 Interview (user delegated; one user decision: Claude in Chrome is the browser of choice)
 - [x] 3 Masterprompt (critic: 3 blocking / 15 serious / 10 minor, all fixed inline)
-- [ ] 4 Execute
-- [ ] 5 Iterate
+- [x] 4 Execute (4 tasks, 4 checkpoint commits, every RED cell filled)
+- [x] 5 Iterate (7/8 DoD proven; U8 closed unproven by the user; 9 of 13 points remain)
 
 ## Tasks
 | # | Task | Size | Depends on | Test | RED | Status |
@@ -15,7 +15,7 @@ Iteration budget: 9 remaining (4 spent: rung 1 on U7, rung 1 then rung 2 on U8) 
 | 1 | Structure tests (`UiContracts`, `EXPECTED_AGENTS`), then `ui-tester.md` (U4) | 3 | — | `tests/test_structure.py::test_ui_agent_is_defined`, `::test_exactly_the_expected_agents_exist`, `::test_each_agent_states_what_it_returns` | `AssertionError: Items in the second set but not the first: 'ui-tester'`; `AssertionError: False is not true : ui-tester.md missing` | done |
 | 2 | Skill wording: masterprompt grammar, tdd, scout variant, iterate (U1, U2, U3) | 3 | — | `::test_ui_grammar_in_masterprompt`, `::test_ui_tdd_names_ui_tasks`, `::test_ui_scout_walks_the_product`, `::test_ui_iterate_dispatches_the_tester` | `AssertionError: 'contract: ui ·' not found in …`; `'## ui tasks' not found in …`; `'runnable product variant' not found in …`; `'ui-tester' not found in …` | done |
 | 3 | README; harness (U5, U6) | 2 | 1-2 | `::test_ui_readme_documents_contracts`; `run.sh` | `AssertionError: '## ui contracts' not found in '# gentic…'`; U6: n/a — runner of the others | done |
-| 4 | Install; live dispatch against the fixture; regression (U7, U8) | 3 | 3 | n/a — live observations | n/a — the observations are the evidence (below) | in progress |
+| 4 | Install; live dispatch against the fixture; regression (U7, U8) | 3 | 3 | n/a — live observations | n/a — the observations are the evidence (below) | done (U8 unproven) |
 
 Sizes are planning estimates only; they never spend the iteration budget. Order 1–4.
 
@@ -26,6 +26,7 @@ Sizes are planning estimates only; they never spend the iteration budget. Order 
 | 2 | U8 regression gate (suite 20260902-215633) | 1 | 1 | FAILED: `with 3/4 (0.75) exhausted`, 56 turns, 2.28 USD, `pii-surfaced` failed. Transcript: the Scout variant did **not** fire (0 browser/server tool uses); 64 tool uses went Scout→Interview→Masterprompt→Execute (23 edits) and the limit hit mid-Execute, so no final message existed for the last-message grader. Root cause: the 55-turn budget's zero headroom (brain note after R4). Fix: `csv-export-probe` `max_turns: 89`, per-run cap 5 USD (Fibonacci), expectations updated first (RED `55 != 89`, `'3' != '5'`); README updated. Second and last U8 invocation follows. |
 | 0 | U1–U7 | — | 0 | PROVEN by `dod-auditor`: `-k ui_grammar` 1 OK · `-k ui_tdd -k ui_scout` 2 OK · `-k ui_iterate` 1 OK · `-k ui_agent -k expected_agents -k states_what_it_returns` 3 OK · `-k ui_readme` 1 OK · `run.sh` all checks passed, `test_structure (Ran 47 tests)` · U7 artifact: report verified, PNG 800×400 27,996 B viewed, curl count 4, install in sync. U8: UNVERIFIABLE — two invocations spent. |
 | 3 | U8 regression gate, second invocation (suite 20260902-220926) | 2 | 2 | FAILED: `with 0/4 (0.00) $0.00`, `is_error`, detail `timeout after 900s`. The session was killed by the runner's default `timeout_seconds` at exactly 15 minutes after 86 tool uses and two agent dispatches — a harness limit, not a workflow failure. Two failed fixes at rung 1 make rung 2 mandatory: the case now sets `timeout_seconds: 1597`, pinned by the five-cases test (RED `900 != 1597`). **U8's two-invocation cap is spent; a third run needs the user's word** (spec constraint, rung-5 territory) — handed off. |
+| 4 | U8 | — | 0 | **Closed unproven by the user** ("close", 2026-09-02). Not reworded. The raised limits (89 turns, 5 USD, 1597 s) apply to the next run that exercises the workflow case. |
 
 ## Notes / handoff
 - Child run R6 of the epic `2026-09-02-self-improving-gentic` (brief items 11 and 13, the
@@ -65,3 +66,32 @@ regress or to pass under the new wording. A third invocation (≈ 3–5 USD, ≈
 spec's cap and is the user's call: authorise it, or accept suite `20260902-215633` (3/4, cut off
 mid-Execute with the brief, decisions and masterprompt written) as the evidence and close with U8
 recorded as not proven. `ui-tester` now resolves by name in fresh sessions.
+
+## Final report
+
+**Mission.** A UI flow is now a Definition-of-Done contract with the project's own e2e runner as
+its executable half and a `not reproducible in CI` flag where none exists; a fifth agent,
+`ui-tester`, drives Claude in Chrome, reads the screen literally and files a screenshot under the
+run's `evidence/` directory; Scout walks a runnable product before asking when a request touches
+a user-facing surface. Installed machine-wide; the agent resolves by name in fresh sessions.
+
+**DoD: 7 of 8 proven; U8 closed unproven by the user.** Two regression invocations died on harness
+limits (55-turn exhaustion mid-Execute; a 900 s timeout after 86 tool uses); the workflow itself was
+not shown to regress or pass. Both limits are raised (89 turns, 5 USD, 1597 s). Budget 9 of 13:
+rung 1 on U7's screenshot method, rung 1 and rung 2 on U8.
+
+**What the live dispatch taught** (brain): the extension's `save_to_disk` writes no file, from a
+subagent or the main thread, so the agent captures evidence with headless Chrome and says so; a
+subagent's file read is logged in the session ledger, so the duplicate-read guard denies the main
+thread's first read of that file; `num_turns` exceeds `--max-turns`; wall clock, not turns or
+dollars, is the binding limit on long workflow runs.
+
+**Spent.** 2.28 + 0.00 USD (the second run was killed before reporting cost; the ledger now charges
+the cap for such runs, a ship-review fix).
+
+**Unconfirmed defaults** (`user — delegated`): the `ui` contract form; evidence under the run
+directory at half scale; `ui-tester` without a `tools:` line (whether a `tools:` list may name MCP
+tools is unverified); the runnable-product variant's 13-call box; the raised limits.
+
+**Deliberately not done.** No Playwright in this repo; no UI eval case; no adjective rubric; no
+browser tools for `dod-auditor`; no `launch.json`; no fixture changes.
