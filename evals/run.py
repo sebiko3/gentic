@@ -338,6 +338,8 @@ def execute_run(case, arm, index, args, claude, workspaces, hooks_brain):
     except subprocess.TimeoutExpired as exc:
         entry["is_error"] = True
         entry["_error"] = f"timeout after {case.timeout_seconds}s"
+        # A killed session never reports its spend; assume the cap so the ceiling still holds.
+        entry["cost_usd"] = float(args.max_budget_usd)
         entry["_created"] = snapshot(workspace) - before
         keep_output(entry, workspace.name, args.results_dir, exc.stdout, exc.stderr)
         return entry
@@ -352,6 +354,9 @@ def execute_run(case, arm, index, args, claude, workspaces, hooks_brain):
     elif proc.returncode != 0 or facts["is_error"]:
         entry["is_error"] = True
         entry["_error"] = f"claude exited {proc.returncode}: {proc.stderr.strip()[:300]}"
+        if not facts["subtype"]:
+            # No result line at all: the spend is unknown, so book the cap rather than zero.
+            entry["cost_usd"] = max(entry["cost_usd"], float(args.max_budget_usd))
     return entry
 
 

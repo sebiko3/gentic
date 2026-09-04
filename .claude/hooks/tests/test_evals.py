@@ -241,6 +241,15 @@ class Graders(EvalsCase):
         self.assertFalse(arm["graders"][0]["passed"])
         self.assertIn("timeout after 1s", arm["graders"][0]["detail"])
 
+    def test_timed_out_run_is_charged_the_cap(self):
+        """A killed session emits no result line, so its cost is unknown; the ledger must assume
+        the per-run cap was spent, or the suite ceiling can be overrun by silent runs."""
+        self.case("slow", fields={"timeout_seconds": 1}, graders={"any": {"type": "regex", "pattern": "."}})
+        self.run_runner("--arm", "with", "--case", "slow", "--max-budget-usd", "4", env={"FAKE_CLAUDE_SLEEP": "3"})
+        result = self.result_json()
+        self.assertEqual(result["cases"][0]["arms"]["with"][0]["cost_usd"], 4.0, "timed-out run not charged the cap")
+        self.assertEqual(result["totals"]["cost_usd"], 4.0)
+
 
 EXHAUSTED = "\n".join([
     json.dumps({"type": "system", "subtype": "init", "tools": ["Read", "Write", "Bash"]}),
