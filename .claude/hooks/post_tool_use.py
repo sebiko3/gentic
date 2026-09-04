@@ -88,10 +88,10 @@ def main():
         if subagent in REVIEW_AGENTS:
             state.setdefault("session", {})["reviewed"] = True
             changed = True
-        # A subagent returned: free its slot in the concurrency valve (floor 0 — background
-        # spawns were never counted). Locked, like the increment.
+        # A foreground subagent returned: free its slot in the concurrency valve (floor 0).
+        # Background spawns were never counted, so their return must not decrement either.
         session_id = payload.get("session_id")
-        if session_id:
+        if session_id and not tool_input.get("run_in_background"):
             with common.session_lock(session_id):
                 fresh = common.load_state(session_id)
                 fresh_session = fresh.setdefault("session", {})

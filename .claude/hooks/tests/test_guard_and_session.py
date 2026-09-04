@@ -157,6 +157,17 @@ class ConcurrencyValve(unittest.TestCase):
         code, out, _ = run(PRE, self.spawn_payload(background=True), self.state)
         self.assertIsNone(self.decision(out), "a background spawn must never be denied")
 
+    def test_background_return_frees_no_foreground_slot(self):
+        """Background spawns are never counted, so their return must not decrement either —
+        otherwise a sixth foreground subagent slips through the cap."""
+        for _ in range(5):
+            run(PRE, self.spawn_payload(), self.state)
+        run(POST, {"hook_event_name": "PostToolUse", "tool_name": "Task",
+                   "tool_input": {"subagent_type": "general-purpose", "run_in_background": True},
+                   "session_id": self.session}, self.state)
+        code, out, _ = run(PRE, self.spawn_payload(), self.state)
+        self.assertEqual(self.decision(out), "deny", "a background return freed a foreground slot")
+
     def test_valve_counts_parallel_spawns(self):
         env = dict(os.environ, CLAUDE_HOOK_STATE_DIR=self.state)
         procs = [subprocess.Popen([sys.executable, str(PRE)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
