@@ -15,7 +15,9 @@ only clock in the output is `wait`'s elapsed-seconds prefix. Not a hot-path hook
 """
 
 import argparse
+import contextlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -118,6 +120,84 @@ def cmd_wait(args):
         time.sleep(args.interval)
 
 
+def cmd_failed_logs(args):
+    code, checks = fetch_checks(args.pr, args.repo)
+    if code is not None:
+        if code == EXIT_NONE:
+            sys.stderr.write("nothing failed\n")
+            return 1
+        return code
+    failing = [c for c in checks if c.get("bucket") in RED]
+    if not failing:
+        sys.stderr.write("nothing failed\n")
+        return 1
+    printed = 0
+    for check in failing:
+        match = JOB_LINK.search(str(check.get("link", "")))
+        if not match:
+            sys.stderr.write(f"no link for {check.get('name', '?')}\n")
+            continue
+        run_id, job_id = match.groups()
+        _, log, err = gh(["run", "view", run_id, "--job", job_id, "--log-failed"], args.repo)
+        print(f"== {check.get('name', '?')} (run {run_id}, job {job_id})")
+        lines = (log or err).splitlines()
+        for line in lines[-args.lines:]:
+            print(line)
+        printed += 1
+    if not printed:
+        sys.stderr.write("no parsable links\n")
+        return 1
+    return 0
+
+
+def refuse(reason):
+    sys.stderr.write(reason + "\n")
+    return 1
+
+
+def cmd_merge(args):
+    """Merge only when every gate holds; each refusal exits 1 without calling `gh pr merge`."""
+    root = project_conventions.project_root(Path.cwd())
+    devnull = open(os.devnull, "w")
+    try:
+        with contextlib.redirect_stdout(devnull), contextlib.redirect_stderr(devnull):
+            granted = project_conventions.authorized("merge-on-green", root) == 0
+    finally:
+        devnull.close()
+    if not granted:
+        return refuse("not authorized: merge-on-green")
+    if args.repo:
+        _, out, _ = gh(["repo", "view", "--json", "nameWithOwner"])
+        try:
+            own = json.loads(out).get("nameWithOwner", "")
+        except ValueError:
+            own = ""
+        if args.repo != own:
+            return refuse(f"foreign repository: {args.repo} (this checkout is {own or 'unknown'})")
+    code, out, err = gh(["pr", "view", str(args.pr), "--json", "state,isDraft,mergeable"], args.repo)
+    if code != 0:
+        return refuse(f"pr not mergeable: {err.strip() or 'gh pr view failed'}")
+    try:
+        view = json.loads(out)
+    except ValueError:
+        return refuse("pr not mergeable: gh pr view returned no JSON")
+    if view.get("state") != "OPEN":
+        return refuse(f"pr not mergeable: state {view.get('state')}")
+    if view.get("isDraft"):
+        return refuse("pr not mergeable: draft")
+    if view.get("mergeable") == "CONFLICTING":
+        return refuse("pr not mergeable: conflicting")
+    code, checks = fetch_checks(args.pr, args.repo)
+    if code is not None or verdict(checks) != EXIT_GREEN:
+        return refuse("checks not green")
+    code, _, err = gh(["pr", "merge", str(args.pr), "--merge"], args.repo)
+    if code != 0:
+        sys.stderr.write(err if err.endswith("\n") else err + "\n")
+        return code
+    print("merged")
+    return 0
+
+
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("mode", choices=("checks", "wait", "failed-logs", "merge"))
@@ -129,7 +209,7 @@ def build_parser():
     return parser
 
 
-COMMANDS = {"checks": cmd_checks, "wait": cmd_wait}
+COMMANDS = {"checks": cmd_checks, "wait": cmd_wait, "failed-logs": cmd_failed_logs, "merge": cmd_merge}
 
 
 def main(argv=None):
