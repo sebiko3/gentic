@@ -1,5 +1,5 @@
 ---
-description: Verify, review, commit, push and open a PR for the current work — the one place git automation runs
+description: Verify, review, commit, push and open a PR for the current work — and, under the project's grants, watch CI, preview and merge — the one place git automation runs
 ---
 
 # /ship
@@ -9,7 +9,8 @@ asked step by step. Nothing here fires on its own; the user typing `/ship` is th
 — or a gentic run in a project that grants `push` and `open-pr` under `## gentic authorizations`
 *and* is listed in `~/.claude/gentic/trusted-projects`, which the run checks with
 `project_conventions.py authorized` before following these steps at the end of Iterate.
-Everything below then runs unattended until it either opens a PR or stops with a clear reason.
+Everything below then runs unattended until it either opens a PR — or, with `--through`, goes as
+far as the project's grants allow — or stops with a clear reason.
 
 Arguments (optional): `$ARGUMENTS` may carry a PR title or a short description of the change.
 
@@ -111,10 +112,30 @@ gh pr create --title "<title>" --body "<body>"
 
 Report the PR URL.
 
+## 8. Through CI, preview and merge (`--through`)
+
+`/ship --through ci` continues after the PR: `python3 "$HOME/.claude/hooks/lib/release.py" wait --pr <n>`
+watches the checks (21 s polls, 1597 s ceiling). Green → report. Red →
+`release.py failed-logs --pr <n>`, then one rung-1 fix: a failing test first, the smallest change
+that makes it pass, one commit, push, `wait` again. At most two such fixes per ship; a third
+failure stops with the logs in the report.
+
+`--through preview` (needs `authorized deploy-preview` → `yes`): deploy with the project's own
+mechanism — the Railway MCP `deploy` when a Railway service is linked, otherwise the preview
+command the project's README documents — and hand the URL to `ui-tester` with the flow the PR
+changes; its report block goes in the PR body.
+
+`--through merge` (needs `authorized merge-on-green` → `yes`): `release.py merge --pr <n>`, which
+refuses on its own when the grant, the mergeability, or the green is missing.
+
+Without a grant, each of these steps writes what it would have done into the report and stops
+there.
+
 ## 7. Never
 
 - Never force-push. Never `git reset --hard`. Never rewrite published history.
   (The `PreToolUse` guard denies these anyway.)
-- Never merge the PR — opening it is where this command ends.
+- Never merge the PR yourself — `release.py merge` under an explicit `merge-on-green` grant is the
+  only path (§8); otherwise opening it is where this command ends.
 - Never edit a Definition of Done item to make it pass.
 - Never claim a check passed without its output in front of you.

@@ -478,6 +478,29 @@ class UiContracts(unittest.TestCase):
             self.assertIn(needle, body)
 
 
+class ReleaseLane(unittest.TestCase):
+    """/ship may continue past the PR only as far as the project's grants allow; the words
+    that say so must stay in place."""
+
+    def lowered(self, rel):
+        return (REPO / rel).read_text(encoding="utf-8").lower()
+
+    def test_ship_has_a_through_section(self):
+        body = self.lowered(".claude/commands/ship.md")
+        for needle in ("--through", "release.py", "merge-on-green", "deploy-preview", "at most two",
+                       "what it would have done", "never merge the pr yourself"):
+            self.assertIn(needle, body)
+        self.assertLess(body.index("## 8."), body.index("## 7."), "section 8 must sit before section 7")
+
+    def test_iterate_ships_through_grants(self):
+        self.assertIn("--through", self.lowered(".claude/skills/gentic-iterate/SKILL.md"))
+
+    def test_readme_documents_the_release_lane(self):
+        body = self.lowered("README.md")
+        self.assertIn("## the release lane", body)
+        self.assertIn("release.py", body)
+
+
 class NoOrphanedSkillFiles(unittest.TestCase):
     """A file shipped inside a skill that its SKILL.md never mentions is invisible.
 

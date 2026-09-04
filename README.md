@@ -221,6 +221,26 @@ brief — questions asked from a screenshot are sharper than questions asked fro
 screenshot a production or authenticated surface or real personal data; fixture and seed data
 only.
 
+## The release lane
+
+`/ship` can continue past the pull request, but only as far as the project's grants allow, and
+every step past "watch" is a script's answer rather than an agent's memory:
+
+```bash
+python3 ~/.claude/hooks/lib/release.py checks --pr 12        # exit 0 green · 1 red · 2 pending · 3 no checks · 6 gh failed
+python3 ~/.claude/hooks/lib/release.py wait --pr 12          # polls every 21 s, up to 1597 s; exit 4 on timeout
+python3 ~/.claude/hooks/lib/release.py failed-logs --pr 12   # the failing jobs' last 89 lines
+python3 ~/.claude/hooks/lib/release.py merge --pr 12         # refuses unless granted, own repo, open, green
+```
+
+Red checks feed back as at most two rung-1 fixes per ship, each test-first with its own commit;
+a third failure stops with the logs in the report. `merge` is gated four ways — `merge-on-green`
+granted and the project trusted, the target repository is the checkout's own, the PR open and
+not conflicting, every check green — and is the one exception to `/ship`'s never-merge rule.
+`--through preview` deploys with the project's own mechanism and hands the URL to `ui-tester`;
+without a grant each step reports what it would have done. This repository's own CI is the
+offline hook harness on GitHub Actions (`.github/workflows/gentic.yml`), never the eval suite.
+
 ## Standing authorizations
 
 A run never pushes and never opens a PR unless you have said so — once, durably, and in two

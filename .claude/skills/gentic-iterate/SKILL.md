@@ -57,7 +57,9 @@ project: if `python3 "$HOME/.claude/hooks/lib/project_conventions.py" authorized
 `dod-auditor` in its review because it just ran, record any review finding in the PR body
 rather than as a rung, and put the PR URL in the report. If either prints `no`, the report says
 what `/ship` would do and stops there; then invoke superpowers:finishing-a-development-branch if it is available,
-to close out the branch.
+to close out the branch. When `push` and `open-pr` were granted and the PR is open, continue with
+`ship.md` §8 as far as the grants allow: `--through ci` always, `preview` and `merge` only when
+`authorized deploy-preview` / `authorized merge-on-green` print `yes`.
 Close the run in the brain: `run finish <slug> --outcome done` (a handoff uses `--outcome stopped`).
 
 ## Red flags — stop and re-read this skill
