@@ -311,7 +311,8 @@ All `default — unconfirmed` (the user delegated every decision). The substance
       test_brain_failure_is_invisible_to_hooks keeps asserting `record_event` returns within
       89 ms when the brain directory cannot be created (single sample; one failure is a
       failure — never re-run to obtain a pass).
-      verify: `python3 .claude/hooks/tests/test_brain.py -k "open_run or invisible"`
+      verify: `python3 .claude/hooks/tests/test_brain.py -k open_run -k invisible` (rung 1
+      amendment: unittest's `-k` has no `or`; two `-k` flags select both tests)
       contract: tests/test_brain.py · HooksWriteEvents.test_events_carry_the_open_run ·
       expected RED: `KeyError: 'run'` (the row has no such column)
 - [ ] **A6 — Prune bounds events and sessions, globally.** On a fixture with three events at

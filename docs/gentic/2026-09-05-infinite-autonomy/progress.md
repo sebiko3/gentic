@@ -1,6 +1,6 @@
 # Run: infinite-autonomy
 Goal: Remove the Stop hook, its gates/nudges and the token-efficiency guards and ledger; make runs continue autonomously without built-in stopping conditions; make gentic use the SQLite brain smartly.
-Iteration budget: 13 remaining (rungs spend it; task sizes never do)
+Iteration budget: 12 remaining (rungs spend it; task sizes never do)
 
 ## Phases
 - [x] 1 Scout
@@ -25,8 +25,29 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 ## Iteration log
 | # | DoD item | Rung | Points | Result |
 |---|----------|------|--------|--------|
+| 1 | A1 no Stop hook, no token guards | — | 0 | PROVEN — `test_structure.py -k stop_hook_and_token_guards` OK |
+| 2 | A2 hooks record red/verification only | — | 0 | PROVEN — `test_tdd.py -k RedLedger` 5 tests OK |
+| 3 | A3 valve counts in the brain | — | 0 | PROVEN — `test_guard_and_session.py -k ConcurrencyValve` 5 tests OK |
+| 4 | A4 schema versioning | — | 0 | PROVEN — `test_brain.py -k migrat` OK |
+| 5 | A5 events name the open run | 1 | 1 | FAILED as written (`-k "open_run or invisible"` → NO TESTS RAN, exit 5: unittest has no `or`); rung 1 amends the verify line to `-k open_run -k invisible` → 2 tests OK. Same class as brain lesson #2 (sqlite-brain D9) |
+| 6 | A6 prune | — | 0 | PROVEN — `test_brain.py -k prune` 2 tests OK |
+| 7 | A7 harness green, four hooks, machine checks | — | 0 | FAILED on this machine only: 12 suites OK, `4 hooks x 5 hostile payloads` OK, medians 45/45/44 ms, `no Stop hook registered` OK, `FAIL ~/.claude/state is no longer used; delete it` — task 9 blocked (see handoff) |
+| 8 | A8 installer | — | 0 | PROVEN — `test_install.py` 18 tests OK |
+| 9 | A9 workflow never stops itself | — | 0 | PROVEN — `test_structure.py -k workflow_prose_never_stops` OK |
+| 10 | A10 docs | — | 0 | PROVEN — `test_structure.py -k docs_describe_the_hooks` OK |
+| 11 | A11 live machine | — | 0 | FAILED: 5 of 7 commands pass (`jq` → null; both backups exist; `user_version` 2; events 327 ≥ 321); `./install.sh --check` → out of sync (21 files); stale files and `~/.claude/state` still present — task 9 blocked (see handoff) |
+| 12 | A12 no dead state code | — | 0 | PROVEN — `test_lib.py` 12 OK; `test_project_conventions.py -k authorized` OK |
 
 ## Notes / handoff
+- 2026-09-05 Iterate: 9/12 proven, 1 rung-1 (A5 verify syntax), A7 and A11 blocked on the
+  live-machine sync the permission classifier denies (`./install.sh`, `rm -r ~/.claude/state`).
+  **Resume:** the user runs, from `~/code/gentic`: `./install.sh`; `rm ~/.claude/hooks/stop.py
+  ~/.claude/hooks/lib/token_efficiency.py ~/.claude/hooks/tests/test_gate.py
+  ~/.claude/hooks/tests/test_token_efficiency.py ~/.claude/hooks/tests/test_review_nudge.py`;
+  `rm -r ~/.claude/state`; then `bash .claude/hooks/tests/run.sh` must print `all checks passed`
+  and `./install.sh --check` must print `in sync`. That closes task 9, A7 and A11; then tick
+  phase 5 and write the final report. Until then the installed hooks are the pre-run copies
+  (Stop unregistered since task 1) and keep recreating `~/.claude/state`.
 - 2026-09-05 task 4: the permission classifier denied `./install.sh` and `rm -r ~/.claude/state`
   (both write under `~/.claude`). The repo is complete and its unit suites are green; on this
   machine `run.sh`'s Configuration section reports `FAIL  ~/.claude/state is no longer used;
