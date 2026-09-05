@@ -81,7 +81,8 @@ each phase skill apply.
 
 - **Task sizing:** 1 / 2 / 3 / 5 / 8 points; anything larger must be split.
 - **Escalation ladder:** rung costs 1 / 2 / 3 / 5 / 8.
-- **Iteration budget:** 13 points per run. Only iterate's rungs spend it; task sizes never do.
+- **Iteration budget:** 13 points per run. When it is spent the ladder escalates (rung 5, then
+  rung 8, which resets it) instead of halting. Only iterate's rungs spend it; task sizes never do.
 
 ## Unconfirmed defaults
 

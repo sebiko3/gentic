@@ -35,6 +35,7 @@ table you create with `sql`. Empty output means "nothing known", never an error.
 | `stats [--all]` | Counts: lessons by what caught them, points, notes, preferences, events |
 | `run start <slug> --goal …` / `run finish <slug> --outcome done\|stopped` | A run's lifecycle |
 | `stamp <slug> <paths…>` | sha256 of each file, so a lesson can be tied to a skill version |
+| `prune [--events-days 89] [--sessions-days 8]` | Delete hook events and idle sessions past their retention — every project |
 | `sql "<one statement>"` | Anything. SELECT prints one JSON object per row |
 
 `--caught-by` names who found the defect: `suite`, `live`, `review`, `critic`, `auditor`, `user`.
@@ -57,7 +58,11 @@ table you create with `sql`. Empty output means "nothing known", never an error.
 ## What the hooks record without asking
 
 `post_tool_use` appends a `red` or `verification` event for every recognised test, lint or
-build command; `stop` appends `gate_block`, `nudge_tdd`, `nudge_review` and `nudge_spend`.
+build command, tagged with the project's open run (`events.run`), so a run's RED/GREEN history
+is one query: `sql "select kind, detail from events where run = '<slug>'"`. Those two kinds
+are the only ones a hook writes. The concurrency valve keeps its per-session counter in the
+`sessions` table (`user_prompt_submit` resets it, `pre_tool_use` takes a slot, `post_tool_use`
+frees one). `session_start` prunes events older than 89 days and sessions idle for 8, silently.
 Credentials in commands are scrubbed before storage. A brain that cannot be opened is
 silently skipped — the hooks never slow down or fail because of it.
 
@@ -74,8 +79,9 @@ confirm its own guesses.
 - `sql` is unrestricted. Before a `DROP`, `DELETE`, `UPDATE` or `ALTER`, the file is copied to
   `brain.sqlite.bak` — one level of undo, overwritten each time.
 - Never `note` a secret. Scrubbing covers hook events only.
-- No schema migrations exist. If a later version changes a table's shape, delete the file (or
-  point `GENTIC_BRAIN` elsewhere) and start again.
+- The schema is versioned (`PRAGMA user_version`, `brain.SCHEMA_VERSION`). An older brain is
+  upgraded in place on first open by additive, guarded migrations; existing rows are never
+  rewritten. Never delete the file to "fix" a shape.
 - The brain is not a run artifact. `progress.md` and friends remain the source of truth for a
   run; the brain is what carries across runs.
 

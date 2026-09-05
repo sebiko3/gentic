@@ -562,6 +562,53 @@ class InfiniteAutonomy(unittest.TestCase):
         self.assertIn("a Stop hook is registered; this setup no longer ships one", text)
         self.assertIn("is no longer used; delete it", text)
 
+    def lowered(self, rel):
+        return (REPO / rel).read_text(encoding="utf-8").lower()
+
+    def test_workflow_prose_never_stops_itself(self):
+        orchestrator = self.lowered(".claude/skills/gentic/SKILL.md")
+        autonomous = orchestrator[orchestrator.index("## autonomous runs"):]
+        for needle in ("never a stop", "rung 5", "rung 8", "escalat", "only the `stop` file"):
+            self.assertIn(needle, autonomous, f"gentic/SKILL.md autonomous runs lacks {needle!r}")
+        iterate = self.lowered(".claude/skills/gentic-iterate/SKILL.md")
+        for needle in ("escalates instead of halting", "resets the balance", "taken autonomously",
+                       "balance -3", "resets to 13"):
+            self.assertIn(needle, iterate, f"gentic-iterate lacks {needle!r}")
+        for gone in ("stop and hand off", "user check-ins"):
+            self.assertNotIn(gone, iterate, f"gentic-iterate still says {gone!r}")
+        self.assertIn("check for `stop`", self.lowered(".claude/skills/gentic-execute/SKILL.md"))
+        brain = self.lowered(".claude/skills/gentic-brain/SKILL.md")
+        for needle in ("prune", "sessions"):
+            self.assertIn(needle, brain)
+        for gone in ("gate_block", "nudge_tdd", "nudge_review", "nudge_spend", "no schema migrations exist"):
+            self.assertNotIn(gone, brain, f"gentic-brain still says {gone!r}")
+
+    def test_docs_describe_the_hooks_that_exist(self):
+        claude_md = self.lowered("CLAUDE.md")
+        self.assertIn("the hooks record, they never block", claude_md)
+        for gone in ("they do not police", "flags a turn", "advisory"):
+            self.assertNotIn(gone, claude_md, f"CLAUDE.md still says {gone!r}")
+        self.assertIn("escalates", claude_md)
+        self.assertIn("escalates", self.lowered(".claude/skills/gentic/ROUTING.md"))
+        readme = self.lowered("README.md")
+        for gone in ("stop hook", "stop-hook", "verification gate", "no schema migrations"):
+            self.assertNotIn(gone, readme, f"README still says {gone!r}")
+        for needle in ("escalates instead of halting", "only the `stop` file", "prune", "sessions", "user_version"):
+            self.assertIn(needle, readme, f"README lacks {needle!r}")
+        hooks_readme = self.lowered(".claude/hooks/README.md")
+        self.assertNotIn("| `stop`", hooks_readme)
+        self.assertNotIn("token-efficiency", hooks_readme)
+        for needle in ("sessions", "prune"):
+            self.assertIn(needle, hooks_readme)
+        kinds = re.findall(r"\| `(\w+)` \| `post_tool_use` \|", hooks_readme)
+        self.assertEqual(sorted(kinds), ["red", "verification"], "hooks README event-kind table drifted")
+        offenders = []
+        for path in markdown_files():
+            for number, line in enumerate(lines_of(path), 1):
+                if "stop.py" in line or "token_efficiency" in line:
+                    offenders.append(f"{path.relative_to(REPO)}:{number}")
+        self.assertEqual(offenders, [], "removed files still named:\n" + "\n".join(offenders))
+
 
 class NoOrphanedSkillFiles(unittest.TestCase):
     """A file shipped inside a skill that its SKILL.md never mentions is invisible.
