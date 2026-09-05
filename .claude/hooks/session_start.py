@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""SessionStart — surface unfinished spec-driven work.
+"""SessionStart — surface unfinished spec-driven work, and keep the brain bounded.
 
 A gentic run outlives the session that started it. Without this, resuming means the user
-has to remember the run exists. The brain's memory of this project is surfaced the same way.
+has to remember the run exists. The brain's memory of this project is surfaced the same way,
+and its events and idle sessions past their retention are pruned — silently, and only when the
+brain already exists: starting a session never creates it.
 Silent when there is nothing outstanding and nothing remembered.
 """
 
@@ -43,6 +45,7 @@ def unfinished(root):
 
 def main():
     payload = common.read_payload()
+    brain.prune_quietly()
 
     root = common.git_root(payload.get("cwd"))
     if not root:

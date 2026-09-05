@@ -35,6 +35,8 @@ SESSION_TIMEOUT = 0.144  # seconds; the valve is contended by up to five paralle
 RECALL_LIMIT = 8       # notes printed by default
 DETAIL_CHARS = 300     # matches post_tool_use.py's command trim
 PREFERENCE_MIN = 2     # agreeing user decisions before a preference is learned
+EVENT_DAYS = 89        # retention for hook events
+SESSION_DAYS = 8       # retention for idle session rows
 
 EVENT_KINDS = ("red", "verification")
 
@@ -271,6 +273,35 @@ def session_release(session_id):
         )
         return True
     return _session_write(write) or False
+
+
+# --- retention -------------------------------------------------------------------------
+#
+# Events and sessions are the only tables that grow on their own. Retention is global: the
+# brain is machine-wide, and an old event is old whichever project wrote it.
+
+def prune(conn, events_days=EVENT_DAYS, sessions_days=SESSION_DAYS):
+    """Delete events and idle sessions past their retention. Returns (events, sessions) removed."""
+    now = time.time()
+    events = conn.execute("DELETE FROM events WHERE ts < ?", (now - events_days * 86400,)).rowcount
+    sessions = conn.execute("DELETE FROM sessions WHERE updated < ?", (now - sessions_days * 86400,)).rowcount
+    conn.commit()
+    return events, sessions
+
+
+def prune_quietly():
+    """The session-start prune: default retention, no output, no file creation, never raises."""
+    try:
+        if not db_path().exists():
+            return
+        conn = sqlite3.connect(str(db_path()), timeout=BUSY_TIMEOUT)
+        try:
+            ensure_schema(conn)
+            prune(conn)
+        finally:
+            conn.close()
+    except Exception:
+        pass
 
 
 def open_run(conn, project):
@@ -564,6 +595,12 @@ def cmd_stats(args, conn, project):
     return 0
 
 
+def cmd_prune(args, conn, project):
+    events, sessions = prune(conn, args.events_days, args.sessions_days)
+    print(f"pruned {events} event(s), {sessions} session(s)")
+    return 0
+
+
 def cmd_run(args, conn, project):
     now = time.time()
     if args.action == "start":
@@ -670,6 +707,12 @@ def build_parser():
     finish.add_argument("slug")
     finish.add_argument("--outcome", choices=("done", "stopped"), required=True)
     p.set_defaults(fn=cmd_run)
+
+    # Global by design: no `scoped` parent, no --project — retention crosses every project.
+    p = sub.add_parser("prune", help="delete events and idle sessions past their retention (every project)")
+    p.add_argument("--events-days", type=int, default=EVENT_DAYS, dest="events_days")
+    p.add_argument("--sessions-days", type=int, default=SESSION_DAYS, dest="sessions_days")
+    p.set_defaults(fn=cmd_prune)
 
     p = sub.add_parser("evals", parents=[scoped], help="scores of the latest (or named) eval suite")
     p.add_argument("--suite", default=None)

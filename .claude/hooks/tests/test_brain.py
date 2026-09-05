@@ -287,6 +287,45 @@ class Migrations(BrainCase):
             self.assertIn("sessions", [r[0] for r in conn.execute("select name from sqlite_master where type='table'")])
 
 
+DAY = 86400
+
+
+class Prune(BrainCase):
+    """Events and sessions are the only tables that grow on their own; retention bounds them."""
+
+    def seed(self):
+        now = time.time()
+        self.ok("sql", "create table if not exists sessions (id text primary key, agents_in_flight integer not null default 0, updated real)")
+        with sqlite3.connect(self.db) as conn:
+            for age, project in ((1, "proj-alpha"), (60, "proj-alpha"), (120, "other")):
+                conn.execute("insert into events (ts, project, kind, detail) values (?, ?, 'red', 'x')",
+                             (now - age * DAY, project))
+            for age, sid in ((1, "fresh"), (30, "stale")):
+                conn.execute("insert into sessions (id, agents_in_flight, updated) values (?, 0, ?)",
+                             (sid, now - age * DAY))
+
+    def test_prune_removes_old_events_and_sessions(self):
+        self.seed()
+        self.assertEqual(self.ok("prune").strip(), "pruned 1 event(s), 1 session(s)")
+        self.assertEqual(len(self.rows("select * from events")), 2, "young events must survive")
+        self.assertEqual([r["id"] for r in self.rows("select id from sessions")], ["fresh"])
+
+        with sqlite3.connect(self.db) as conn:   # a fresh fixture, same shape
+            conn.execute("delete from events")
+            conn.execute("delete from sessions")
+        self.seed()
+        self.assertEqual(self.ok("prune", "--events-days", "30").strip(), "pruned 2 event(s), 1 session(s)")
+
+    def test_session_start_prunes_silently_and_never_creates(self):
+        payload = {"hook_event_name": "SessionStart"}
+        _, out, err = self.hook(SESSION_START, dict(payload))
+        self.assertFalse(self.db.exists(), "a session start must not create the brain")
+        self.seed()
+        _, pruned_out, pruned_err = self.hook(SESSION_START, dict(payload))
+        self.assertEqual((pruned_out, pruned_err), (out, err), "the prune must be silent")
+        self.assertEqual(len(self.rows("select * from events")), 2, "the 120-day event survived a session start")
+
+
 class SessionStart(BrainCase):
     def test_session_start_mentions_brain_when_it_has_something(self):
         payload = {"hook_event_name": "SessionStart"}
