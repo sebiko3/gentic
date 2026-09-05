@@ -4,7 +4,7 @@
 Every test drives the real runner through a fake `claude` placed first on PATH: it records its
 argv, replays a canned stream-json transcript, and never talks to the network. Real API spend
 happens exactly once per run of the workflow — at Iterate, by hand — never here. Each test also
-points `GENTIC_BRAIN`, `CLAUDE_HOOK_STATE_DIR` and `CLAUDE_HOME` at private temp paths, so a test
+points `GENTIC_BRAIN` and `CLAUDE_HOME` at private temp paths, so a test
 run standalone cannot touch the user's memory or setup.
 """
 
@@ -116,7 +116,6 @@ class EvalsCase(unittest.TestCase):
             "FAKE_CLAUDE_ARGV": str(self.argv_log),
             "FAKE_CLAUDE_TRANSCRIPT": str(self.transcript),
             "GENTIC_BRAIN": str(self.brain_db),
-            "CLAUDE_HOOK_STATE_DIR": str(self.tmp / "state"),
             "CLAUDE_HOME": str(self.home),
         })
         environ.pop("FAKE_CLAUDE_TOUCH", None)

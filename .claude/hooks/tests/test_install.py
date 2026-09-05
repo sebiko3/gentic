@@ -40,7 +40,7 @@ class InstallContract(unittest.TestCase):
         result = run(dest=self.dest)
         self.assertEqual(result.returncode, 0, result.stderr)
         for rel in (
-            "hooks/stop.py",
+            "hooks/post_tool_use.py",
             "hooks/lib/common.py",
             "hooks/tests/run.sh",
             "commands/ship.md",
@@ -63,6 +63,36 @@ class InstallContract(unittest.TestCase):
         pre = next((line for line in result.stdout.splitlines() if '"PreToolUse"' in line), "")
         self.assertIn("Task|Agent", pre, "printed PreToolUse matcher lacks the subagent tools")
 
+    def test_settings_block_registers_no_stop_hook(self):
+        """The heredoc is asserted from the file: the installer prints it only when the
+        destination has no hooks key, so stdout would pass vacuously on an installed machine."""
+        source = INSTALL.read_text(encoding="utf-8")
+        block = source[source.index('"hooks": {'):source.index("NOTE", source.index('"hooks": {'))]
+        self.assertNotIn('"Stop"', block)
+        self.assertIn("Task|Agent", block)
+        comment = source[:source.index('"hooks": {')]
+        for phrase in ("verification gate", "review nudge"):
+            self.assertNotIn(phrase, comment, f"installer comment still names the {phrase}")
+
+    def test_upgrade_notice_names_the_stale_stop_hook(self):
+        """A machine that installed the previous version keeps a registered Stop hook and the old
+        script on disk; the installer never deletes, so it must say what to remove."""
+        (self.dest / "hooks").mkdir()
+        (self.dest / "hooks" / "stop.py").write_text("# stale\n")
+        (self.dest / "settings.json").write_text(
+            '{"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "python3 stop.py"}]}]}}')
+        result = run(dest=self.dest)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for needle in ('"Stop"', "hooks/stop.py", "hooks/lib/token_efficiency.py"):
+            self.assertIn(needle, result.stdout, f"upgrade notice does not name {needle}")
+        self.assertTrue((self.dest / "hooks" / "stop.py").exists(), "the installer must not delete")
+
+        clean = Path(tempfile.mkdtemp(prefix="claude-home-"))
+        self.addCleanup(shutil.rmtree, clean, True)
+        (clean / "settings.json").write_text('{"hooks": {"PreToolUse": []}}')
+        quiet = run(dest=clean)
+        self.assertNotIn("stale", quiet.stdout, "a clean install must print no upgrade notice")
+
     def test_run_sh_stays_executable(self):
         run(dest=self.dest)
         self.assertTrue(os.access(self.dest / "hooks/tests/run.sh", os.X_OK))
@@ -80,11 +110,11 @@ class InstallContract(unittest.TestCase):
 
     def test_check_fails_and_names_the_drifted_file(self):
         run(dest=self.dest)
-        drifted = self.dest / "hooks/stop.py"
+        drifted = self.dest / "hooks/post_tool_use.py"
         drifted.write_text(drifted.read_text() + "\n# drift\n")
         check = run("--check", dest=self.dest)
         self.assertNotEqual(check.returncode, 0, "drift went undetected")
-        self.assertIn("stop.py", check.stdout + check.stderr)
+        self.assertIn("post_tool_use.py", check.stdout + check.stderr)
 
     def test_check_reports_a_missing_file_as_drift(self):
         run(dest=self.dest)

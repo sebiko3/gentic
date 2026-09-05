@@ -38,7 +38,7 @@ The spec designs the tests and the tests gate the work — the two halves are on
 - **Masterprompt** — every Definition of Done item names a *test contract*: the test file, the test name, the behaviour asserted, and the expected RED. An item with a verify command but no contract is checking work it never designed.
 - **Execute** — `gentic-tdd` owns the per-task loop. No production code without a failing test first; the real failure text is pasted into `progress.md`, because a resumed session can read the artifact and not your memory.
 - **Docs and prompts count as behaviour.** Their test is a contract test in the project's suite (`.claude/hooks/tests/test_structure.py` is the pattern here). `n/a` is only for a task that changes nothing observable, and must state why.
-- **The hooks notice, they do not police.** The ledger records failing verification runs as RED evidence and flags a turn that changed production code with no test touched and no failure seen. It is advisory and fires once per session; the verification gate remains the only hard block.
+- **The hooks record, they never block.** Every recognised verification run lands in the brain as a `red` or `verification` event tagged with the open run; no hook ends a turn. The Iterate phase and `dod-auditor` are the only proof of done-ness.
 
 ## Fibonacci discipline
 
@@ -46,7 +46,7 @@ Fibonacci numbers are the workflow's balancing mechanism, not decoration:
 
 - **Task sizing:** 1 / 2 / 3 / 5 / 8 points; anything larger must be split.
 - **Escalation ladder:** rung costs 1 / 2 / 3 / 5 / 8 — deeper backtracking costs more because it discards more work.
-- **Iteration budget:** 13 points per run — affords many small fixes or one spec re-opening, never endless fiddling. Only iterate's rungs spend it; task sizes never do.
+- **Iteration budget:** 13 points per run — affords many small fixes or one spec re-opening, never endless fiddling. When it is spent the ladder escalates (rung 5, then rung 8, which resets it) instead of halting. Only iterate's rungs spend it; task sizes never do.
 
 ## Composition
 

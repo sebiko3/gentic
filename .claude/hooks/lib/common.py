@@ -3,114 +3,16 @@
 Two rules govern everything here:
 
 1. A hook must never break a session. Anything unexpected exits 0 with the problem
-   reported as ``systemMessage``; only ``block()`` deliberately exits 2.
+   reported as ``systemMessage``; no hook ever blocks a turn.
 2. These run on hot paths (every prompt, every tool call). Standard library only,
    no subprocesses, no network.
+
+Session state lives in the brain (``lib/brain.py``), not here.
 """
 
 import json
-import os
-import re
 import sys
-import time
 from pathlib import Path
-
-STATE_DIR = Path(os.environ.get("CLAUDE_HOOK_STATE_DIR") or Path.home() / ".claude" / "state")
-
-_UNSAFE_ID = re.compile(r"[^A-Za-z0-9_-]")
-
-
-def _fresh_turn(turn, prompt_id=None, session=None):
-    """A clean per-turn ledger.
-
-    ``session`` is deliberately carried across turns: facts like "a review ran" and "the nudge
-    was already shown" describe the session, not the turn, and would be erased every prompt if
-    they lived alongside the ledger.
-    """
-    return {
-        "turn": turn,
-        "prompt_id": prompt_id,
-        "evidence": [],
-        "red": [],
-        "touched": [],
-        "code_changed": False,
-        "test_touched": False,
-        "session": dict(session or {}),
-    }
-
-
-import contextlib
-import fcntl
-
-
-@contextlib.contextmanager
-def session_lock(session_id):
-    """Serialise read-modify-write of one session's state across concurrent hook processes.
-
-    Five subagents dispatched in one message start five PreToolUse processes at once; without
-    this, each would read 0 and write 1. Failures to lock fall through unlocked — a hook must
-    never break a session over a lock file.
-    """
-    path = _state_file(session_id).with_suffix(".lock")
-    handle = None
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        handle = open(path, "w")
-        fcntl.flock(handle, fcntl.LOCK_EX)
-    except Exception:
-        handle = None
-    try:
-        yield
-    finally:
-        if handle is not None:
-            try:
-                fcntl.flock(handle, fcntl.LOCK_UN)
-                handle.close()
-            except Exception:
-                pass
-
-
-def begin_turn(payload):
-    """Open a new user turn, discarding the previous turn's ledger.
-
-    Called only by the ``UserPromptSubmit`` hook, which fires exactly once per user prompt.
-    Live sessions do not populate ``prompt_id`` (verified against Claude Code 2.1.193), so
-    this — not the payload — is what makes the verification gate re-arm each turn.
-    """
-    session_id = payload.get("session_id")
-    previous = load_state(session_id)
-    state = _fresh_turn(
-        int(previous.get("turn") or 0) + 1,
-        payload.get("prompt_id"),
-        previous.get("session"),
-    )
-    # A new prompt has no foreground subagents in flight; a leaked count must not wedge a session.
-    if "agents_in_flight" in state["session"]:
-        state["session"]["agents_in_flight"] = 0
-    save_state(session_id, state)
-    return state
-
-
-def load_turn_state(payload):
-    """State for the turn in progress.
-
-    Boundaries come from :func:`begin_turn`. When a build does supply ``prompt_id``, a change
-    in it is honoured too, so this stays correct if that field starts being populated.
-    """
-    state = load_state(payload.get("session_id"))
-    prompt_id = payload.get("prompt_id")
-    if prompt_id and state.get("prompt_id") and str(state["prompt_id"]) != str(prompt_id):
-        return _fresh_turn(int(state.get("turn") or 0) + 1, prompt_id, state.get("session"))
-    if prompt_id:
-        state.setdefault("prompt_id", prompt_id)
-    state.setdefault("turn", 0)
-    state.setdefault("evidence", [])
-    state.setdefault("red", [])
-    state.setdefault("touched", [])
-    state.setdefault("code_changed", False)
-    state.setdefault("test_touched", False)
-    state.setdefault("session", {})
-    return state
 
 
 def read_payload():
@@ -150,15 +52,8 @@ def emit_message(text):
         emit({"systemMessage": text})
 
 
-def block(reason):
-    """Deliberately block the pending action. The only path that exits non-zero."""
-    sys.stderr.write(reason)
-    sys.stderr.flush()
-    sys.exit(2)
-
-
 def safe_main(fn):
-    """Run a hook body, guaranteeing exit 0 unless the body called ``block()``."""
+    """Run a hook body, guaranteeing exit 0."""
     try:
         fn()
     except SystemExit:
@@ -169,45 +64,6 @@ def safe_main(fn):
         except Exception:
             pass
     sys.exit(0)
-
-
-def _state_file(session_id):
-    safe = _UNSAFE_ID.sub("_", str(session_id or "unknown"))[:128] or "unknown"
-    return STATE_DIR / f"{safe}.json"
-
-
-def load_state(session_id):
-    """Return this session's state, or ``{}`` if absent or unreadable."""
-    try:
-        return json.loads(_state_file(session_id).read_text())
-    except Exception:
-        return {}
-
-
-def save_state(session_id, state):
-    """Persist session state atomically. Failures are swallowed by design."""
-    path = _state_file(session_id)
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(f".{os.getpid()}.tmp")
-        tmp.write_text(json.dumps(state))
-        tmp.replace(path)
-    except Exception:
-        pass
-
-
-def prune_state(days=7):
-    """Delete session state untouched for ``days``."""
-    cutoff = time.time() - days * 86400
-    try:
-        for path in STATE_DIR.glob("*.json"):
-            try:
-                if path.stat().st_mtime < cutoff:
-                    path.unlink()
-            except Exception:
-                continue
-    except Exception:
-        pass
 
 
 def git_root(cwd):

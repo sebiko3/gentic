@@ -1,7 +1,8 @@
 # Universal automation layer
 
-Machine-wide Claude Code automation: intent routing, a verification gate, a destructive-git guard,
-and resume notices. Applies in every project.
+Machine-wide Claude Code automation: intent routing, a destructive-git guard, `.agentignore`, a
+concurrency valve, a RED/GREEN ledger in the brain, and resume notices. Applies in every project.
+No hook ever ends a turn.
 
 Built by the gentic run `2026-08-17-universal-claude-setup`
 (spec: `~/code/gentic/docs/gentic/2026-08-17-universal-claude-setup/masterprompt.md`).
@@ -10,7 +11,7 @@ Built by the gentic run `2026-08-17-universal-claude-setup`
 
 1. **A hook may never break a session.** Every script exits 0 on its own errors, surfacing the
    problem as `systemMessage`. Only deliberate policy decisions use exit 2.
-2. **No LLM calls on hot paths.** `UserPromptSubmit`, `PostToolUse` and `Stop` fire constantly;
+2. **No LLM calls on hot paths.** `UserPromptSubmit`, `PreToolUse` and `PostToolUse` fire constantly;
    they are pure Python, standard library only.
 3. **Silence is the default branch.** Hooks emit nothing unless a rule actually fires.
 4. **Never interpolate payload fields into a shell string.** JSON is parsed in Python.
@@ -19,40 +20,14 @@ Built by the gentic run `2026-08-17-universal-claude-setup`
 
 | Event | Script | Does |
 |-------|--------|------|
-| `SessionStart` | `session_start.py` | Prunes stale state; reports unfinished gentic runs |
-| `UserPromptSubmit` | `user_prompt_submit.py` | Classifies intent; injects a task frame + routing directive for non-trivial work |
-| `PreToolUse` (file tools + Bash) | `pre_tool_use.py` | Denies destructive git/rm commands, and enforces `.agentignore` |
-| `PostToolUse` (Bash\|Edit\|Write) | `post_tool_use.py` | Records verification evidence and touched files |
-| `Stop` | `stop.py` | Blocks a "done" claim after a code edit when nothing was verified |
+| `SessionStart` | `session_start.py` | Prunes the brain's old events and idle sessions; reports unfinished gentic runs |
+| `UserPromptSubmit` | `user_prompt_submit.py` | Classifies intent; injects a routing directive for non-trivial work; resets the valve's counter |
+| `PreToolUse` (file tools, Bash, subagents) | `pre_tool_use.py` | Denies destructive git/rm commands, enforces `.agentignore`, caps concurrent subagents |
+| `PostToolUse` (Bash, subagents) | `post_tool_use.py` | Records each verification run as `red` or `verification` in the brain; frees a valve slot |
 
-Session state lives in `~/.claude/state/<session_id>.json` and is pruned after 7 days.
-
-## Token-efficiency guards
-
-Two PreToolUse guards protect the model's context budget; both share one **valve**: a deny fires
-**at most once per file, per session**, and any retry passes unconditionally, so a false positive
-(most likely a stale ledger after context compaction) costs exactly one round-trip and can never
-loop.
-
-- **Duplicate-read guard.** A parameterless `Read` of a file already read this session and
-  unchanged since (same mtime and size) is denied with a pointer back to the content already in
-  context. A `Read` carrying `offset` or `limit` always passes — that is the documented escape
-  hatch, and partial reads never enter the duplicate ledger in either direction.
-- **Bare-cat guard.** A Bash command that is exactly `cat` of one file larger than **89 KB** — no
-  pipes, no redirects, no separators, a single file argument — is denied with a ranged-read
-  suggestion (`sed -n 'A,Bp'`, or Read with offset/limit). Anything composed passes.
-
-The hooks also keep an **estimated-spend ledger**: Read costs are estimated from file size at
-PreToolUse (PostToolUse never sees Read), Bash result sizes at PostToolUse, identical re-runs of
-read-only commands with no intervening edit are counted, and one advisory line is reported at
-Stop when the session crosses ~55k estimated tokens — once per session, joined into the combined
-nudge message. All figures are **bytes/4 estimates**, a heuristic, not a measurement; no
-tokenizer runs and nothing is reported to the model.
-
-## The Stop gate cannot trap you
-
-The gate fires **at most once per user prompt**. It sets `stop_block_fired` before exiting 2, so the
-immediately following stop always passes. A false positive costs one extra turn, never a deadlock.
+The hooks keep no state of their own: the concurrency valve's counter lives in the brain's
+`sessions` table, keyed by session id, and `brain.py prune` (run silently at every session
+start) deletes idle sessions after 8 days and events after 89.
 
 ## `.agentignore`
 
@@ -125,7 +100,7 @@ cp ~/.claude/settings.json.bak-2026-08-17 ~/.claude/settings.json
 ```
 
 That removes the `hooks` key entirely; the scripts become inert. To also remove them:
-`rm -rf ~/.claude/hooks ~/.claude/state`.
+`rm -rf ~/.claude/hooks`.
 
 ## Verification vocabulary
 
@@ -133,37 +108,41 @@ The ledger recognises a verification command by name: pytest, unittest, tox, nox
 mocha, ava, the npm/yarn/pnpm test, lint, typecheck and build scripts, go test/build/vet, cargo
 test/build/check/clippy, make test/check/lint/build, tsc, mypy, ruff, flake8, eslint, biome,
 pyright, swift test, xcodebuild, gradle test, mvn test/verify, dotnet test, rspec, phpunit —
-and the UI test runners and audits: **playwright, cypress, lighthouse, axe**. A green run is
-evidence for the Stop gate; a red one is the RED of a test-first task, UI contracts included.
+and the UI test runners and audits: **playwright, cypress, lighthouse, axe**. A green run is a
+`verification` event; a red one is the RED of a test-first task, UI contracts included.
 
 ## The concurrency valve
 
 `pre_tool_use.py` counts foreground subagent spawns (`Task`/`Agent` tool calls) per session and
 denies a spawn while five are in flight, with a reason that says so; `post_tool_use.py` frees a
 slot when a subagent returns. Background spawns (`run_in_background: true`) return immediately
-and are not counted, on spawn or on return. The counter lives in session state under a file lock, so five spawns
-issued in one message are all seen, and it resets to 0 at every user prompt so a leaked count
-cannot wedge a session. The PreToolUse matcher must include `Task|Agent` for the valve to run
-— the installer's printed settings block does.
+and are not counted, on spawn or on return. The counter is one row in the brain's `sessions`
+table, changed by a single atomic `UPDATE` under SQLite's own lock, so five spawns issued in one
+message are all seen; it resets to 0 at every user prompt so a leaked count cannot wedge a
+session. A brain that cannot be opened fails **open**: every spawn is allowed and nothing is
+printed — an uncapped fan-out is preferred to a blocked session. The PreToolUse matcher must
+include `Task|Agent` for the valve to run — the installer's printed settings block does.
 
 ## The brain
 
-`post_tool_use.py` and `stop.py` also append events to gentic's brain, `~/.claude/gentic/brain.sqlite`
+`post_tool_use.py` appends events to gentic's brain, `~/.claude/gentic/brain.sqlite`
 (`GENTIC_BRAIN` overrides the path; the harness always sets it to a throwaway file). The kinds
-they write, and nothing else:
+it writes, and nothing else:
 
 | kind | written by | detail |
 |------|-----------|--------|
 | `red` | `post_tool_use` | a recognised verification command that exited non-zero |
 | `verification` | `post_tool_use` | one that exited 0 (or with no exit code available) |
-| `gate_block` | `stop` | the verification gate's block reason |
-| `nudge_tdd`, `nudge_review`, `nudge_spend` | `stop` | the advisory text shown to the user |
 
-`detail` is the first 300 characters of the command or message, with credential values
+Each event carries `run`, the slug of the project's open gentic run at the time (NULL when
+none), so `select kind, detail from events where run = '<slug>'` is a run's whole RED/GREEN
+history. `detail` is the first 300 characters of the command, with credential values
 (`Authorization:`, `--password`, `token=`, `password=`, `secret=`, `AWS_…=`) replaced by `***`.
 Every write is best-effort and **silent on failure**: `lib/brain.py` opens the file with a 34 ms
 lock timeout, and a brain that is missing, locked, or under a path that cannot be created costs
 the hook nothing — no message, no stderr, no exit code change. `session_start.py` reads the
 brain (never creates it) to mention how many lessons and learned preferences exist for the
-project. Everything else in the brain — notes, decisions, lessons, runs, stamps, free SQL — is
-written by the phase skills through the same CLI; see `skills/gentic-brain/SKILL.md`.
+project, and prunes it quietly when it already exists. The schema is versioned
+(`PRAGMA user_version`) and an older brain is upgraded in place on first open. Everything else
+in the brain — notes, decisions, lessons, runs, stamps, free SQL — is written by the phase
+skills through the same CLI; see `skills/gentic-brain/SKILL.md`.

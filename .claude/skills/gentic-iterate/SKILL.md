@@ -35,18 +35,31 @@ Root cause first — if superpowers:systematic-debugging is available, you MUST 
 | 5 | 5 pts | Re-open `masterprompt.md` — a Decision or DoD item was wrong (invoke gentic-masterprompt to amend, then gentic-execute for affected tasks) |
 | 8 | 8 pts | Re-open the Interview — the framing itself was wrong (invoke gentic-interview, then gentic-masterprompt and gentic-execute as the new answers require) |
 
-Costs are fibonacci because each rung discards more prior work; the default budget of 13 affords many small fixes, a few reworks, or one spec re-opening — never endless fiddling.
+Costs are fibonacci because each rung discards more prior work; the default budget of 13 affords many small fixes, a few reworks, or one spec re-opening — never endless fiddling. When the balance runs out the ladder escalates instead of halting (see the hard rules): the budget decides *how far back* to go, never *whether* to continue.
 
 ## Hard rules
 
 - **The initial verification failure is not an attempt; fixes are.** Each fix attempt starts a rung and deducts that rung's points anew from the budget line in `progress.md`, logged: item, rung, points, result.
 - **Same DoD item fails two fix attempts at the same rung → the next rung is mandatory.** No third attempt at a level — and "next" is a floor: the diagnosis may justify jumping higher, never staying. "One more quick try" is the loop this skill exists to break.
-- A mandated rung costing more than the remaining budget = budget exhausted: stop and hand off.
+- **A mandated rung costing more than the remaining balance escalates, never halts.** Take rung 5
+  at once and record the overspend as a negative balance; if a mandated rung again exceeds the
+  balance after a rung 5, take rung 8. A taken rung 8 resets the balance to 13 for the re-framed
+  cycle — the one event that resets the balance — and the iteration log says so. Worked example:
+
+  | Balance | Event | Result |
+  |---------|-------|--------|
+  | 2 | item fails twice at rung 3 | rung 5 mandated (5 pt) — taken, balance -3 |
+  | -3 | item fails twice at rung 5 | rung 8 mandated — taken, balance resets to 13 |
 - Every rung spent is a lesson for the brain (`gentic-brain`):
   `lesson --item <DoD item> --rung <n> --points <n> --caught-by <suite|live|review|critic|auditor|user> --cause "<root cause>"`.
 - Commit rung work like tasks, with the subject from `project_conventions.py commit` — `gentic(<slug>): rung-<n> <DoD item>` in an adopted repo, `rung-<n> <DoD item>` in any other project.
-- Rungs 5 and 8 are user check-ins. If the session is autonomous, do not silently rewrite the spec — stop and hand off instead. (A rung you stop at instead of starting deducts nothing and gets the same handoff as budget exhaustion.)
-- Budget exhausted → stop. Write an honest handoff in `progress.md` (what passes, what fails, root-cause state, recommended next rung) and report to the user. A stopped run with a clean handoff beats a thrashed one.
+- Rungs 5 and 8 are taken autonomously. Rung 5 invokes gentic-masterprompt to amend the spec;
+  rung 8 invokes gentic-interview, which under its non-interactive rule adopts brain preferences
+  and scouted defaults. Every decision changed by either rung is flagged `default — unconfirmed`
+  and listed in the final report — that report, not a pause, is where the user reverses it.
+- The only early end is the user's `STOP` file (checked above). A run with `STOP` writes an
+  honest handoff in `progress.md` (what passes, what fails, root-cause state, recommended next
+  rung); every other run continues until the Definition of Done is proven.
 
 ## Final report (all DoD green)
 

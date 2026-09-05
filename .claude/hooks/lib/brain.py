@@ -31,11 +31,14 @@ DEFAULT_PATH = Path.home() / ".claude" / "gentic" / "brain.sqlite"
 
 # Fibonacci-derived balancing values (house rule).
 BUSY_TIMEOUT = 0.034   # seconds a hot-path write may wait on a lock
+SESSION_TIMEOUT = 0.144  # seconds; the valve is contended by up to five parallel spawns
 RECALL_LIMIT = 8       # notes printed by default
 DETAIL_CHARS = 300     # matches post_tool_use.py's command trim
 PREFERENCE_MIN = 2     # agreeing user decisions before a preference is learned
+EVENT_DAYS = 89        # retention for hook events
+SESSION_DAYS = 8       # retention for idle session rows
 
-EVENT_KINDS = ("red", "verification", "gate_block", "nudge_tdd", "nudge_review", "nudge_spend")
+EVENT_KINDS = ("red", "verification")
 
 DESTRUCTIVE = re.compile(r"^\s*(drop|delete|update|alter)\b", re.I)
 
@@ -67,6 +70,20 @@ SCHEMA = (
     " exhausted INTEGER DEFAULT 0)",
     "CREATE TABLE IF NOT EXISTS eval_graders ("
     " id INTEGER PRIMARY KEY, run_id INTEGER, name TEXT, type TEXT, passed INTEGER, detail TEXT)",
+)
+
+# Schema versions are additive and every statement is guarded, so opening a brain of any earlier
+# shape upgrades it in place. Version 1 is the pre-versioning shape (eval_runs.exhausted);
+# version 2 adds the sessions table, events.run and the query indexes. Existing rows are never
+# rewritten: events from before version 2 keep run = NULL.
+SCHEMA_VERSION = 2
+
+INDEXES = (
+    "CREATE INDEX IF NOT EXISTS idx_events_project_ts ON events(project, ts)",
+    "CREATE INDEX IF NOT EXISTS idx_events_run ON events(run)",
+    "CREATE INDEX IF NOT EXISTS idx_notes_project_ts ON notes(project, ts)",
+    "CREATE INDEX IF NOT EXISTS idx_lessons_project_ts ON lessons(project, ts)",
+    "CREATE INDEX IF NOT EXISTS idx_runs_project_finished ON runs(project, finished)",
 )
 
 FTS_SCHEMA = (
@@ -120,13 +137,38 @@ def has_fts(conn):
     return row is not None
 
 
+def add_column(conn, table, column, declaration):
+    """ALTER TABLE … ADD COLUMN, skipped when the column already exists."""
+    if column not in [row[1] for row in conn.execute(f"PRAGMA table_info({table})")]:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {declaration}")
+
+
+def migrate_1(conn):
+    add_column(conn, "eval_runs", "exhausted", "INTEGER DEFAULT 0")
+
+
+def migrate_2(conn):
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS sessions ("
+        " id TEXT PRIMARY KEY, agents_in_flight INTEGER NOT NULL DEFAULT 0, updated REAL)"
+    )
+    add_column(conn, "events", "run", "TEXT")
+    for statement in INDEXES:
+        conn.execute(statement)
+
+
+MIGRATIONS = (migrate_1, migrate_2)
+
+
 def ensure_schema(conn):
     for statement in SCHEMA:
         conn.execute(statement)
-    # One additive, idempotent migration: brains created before eval_runs.exhausted existed.
-    columns = [row[1] for row in conn.execute("PRAGMA table_info(eval_runs)")]
-    if columns and "exhausted" not in columns:
-        conn.execute("ALTER TABLE eval_runs ADD COLUMN exhausted INTEGER DEFAULT 0")
+    current = conn.execute("PRAGMA user_version").fetchone()[0]
+    for version, migrate in enumerate(MIGRATIONS, start=1):
+        if version > current:
+            migrate(conn)
+    if current < SCHEMA_VERSION:
+        conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     if fts_wanted() and not has_fts(conn):
         try:
             for statement in FTS_SCHEMA:
@@ -161,9 +203,9 @@ def record_event(cwd, session, kind, detail, data=None):
         conn = connect()
         try:
             conn.execute(
-                "INSERT INTO events (ts, project, session, kind, detail, data) VALUES (?,?,?,?,?,?)",
+                "INSERT INTO events (ts, project, session, kind, detail, data, run) VALUES (?,?,?,?,?,?,?)",
                 (time.time(), project, session, kind, scrub(str(detail))[:DETAIL_CHARS],
-                 json.dumps(data) if data is not None else None),
+                 json.dumps(data) if data is not None else None, open_run(conn, project)),
             )
             conn.commit()
         finally:
@@ -172,6 +214,112 @@ def record_event(cwd, session, kind, detail, data=None):
     except Exception:
         # A brain that cannot be opened, created or locked in time is invisible to the session.
         return False
+
+
+# --- session state (the concurrency valve's counter) -----------------------------------------
+#
+# Best-effort like record_event: nothing here raises, prints, or waits past its busy timeout.
+# A brain that cannot be opened fails OPEN — session_acquire says yes — because an uncapped
+# fan-out is preferred to a blocked session. Sessions are keyed by session id alone; they need
+# no project, and any hook may create the file, exactly as the JSON state file was created.
+
+def _session_write(fn):
+    try:
+        conn = connect(timeout=SESSION_TIMEOUT)
+        try:
+            result = fn(conn)
+            conn.commit()
+            return result
+        finally:
+            conn.close()
+    except Exception:
+        return None
+
+
+def session_reset(session_id):
+    """Zero the session's in-flight counter (a new user prompt). True when written."""
+    if not session_id:
+        return False
+
+    def write(conn):
+        conn.execute(
+            "INSERT INTO sessions (id, agents_in_flight, updated) VALUES (?, 0, ?)"
+            " ON CONFLICT(id) DO UPDATE SET agents_in_flight = 0, updated = excluded.updated",
+            (session_id, time.time()),
+        )
+        return True
+    return _session_write(write) or False
+
+
+def session_acquire(session_id, cap):
+    """Take one in-flight slot if fewer than `cap` are taken. True when taken — or when no
+    brain could count (fail open)."""
+    if not session_id:
+        return True
+
+    def write(conn):
+        conn.execute("INSERT OR IGNORE INTO sessions (id, agents_in_flight, updated) VALUES (?, 0, ?)",
+                     (session_id, time.time()))
+        taken = conn.execute(
+            "UPDATE sessions SET agents_in_flight = agents_in_flight + 1, updated = ?"
+            " WHERE id = ? AND agents_in_flight < ?",
+            (time.time(), session_id, cap),
+        ).rowcount
+        return taken == 1
+    result = _session_write(write)
+    return True if result is None else result
+
+
+def session_release(session_id):
+    """Free one in-flight slot (floor 0). True when written."""
+    if not session_id:
+        return False
+
+    def write(conn):
+        conn.execute(
+            "UPDATE sessions SET agents_in_flight = MAX(agents_in_flight - 1, 0), updated = ? WHERE id = ?",
+            (time.time(), session_id),
+        )
+        return True
+    return _session_write(write) or False
+
+
+# --- retention -------------------------------------------------------------------------
+#
+# Events and sessions are the only tables that grow on their own. Retention is global: the
+# brain is machine-wide, and an old event is old whichever project wrote it.
+
+def prune(conn, events_days=EVENT_DAYS, sessions_days=SESSION_DAYS):
+    """Delete events and idle sessions past their retention. Returns (events, sessions) removed."""
+    now = time.time()
+    events = conn.execute("DELETE FROM events WHERE ts < ?", (now - events_days * 86400,)).rowcount
+    sessions = conn.execute("DELETE FROM sessions WHERE updated < ?", (now - sessions_days * 86400,)).rowcount
+    conn.commit()
+    return events, sessions
+
+
+def prune_quietly():
+    """The session-start prune: default retention, no output, no file creation, never raises."""
+    try:
+        if not db_path().exists():
+            return
+        conn = sqlite3.connect(str(db_path()), timeout=BUSY_TIMEOUT)
+        try:
+            ensure_schema(conn)
+            prune(conn)
+        finally:
+            conn.close()
+    except Exception:
+        pass
+
+
+def open_run(conn, project):
+    """Slug of the project's most recently started, unfinished run, or None."""
+    row = conn.execute(
+        "SELECT slug FROM runs WHERE project = ? AND finished IS NULL ORDER BY started DESC LIMIT 1",
+        (project,),
+    ).fetchone()
+    return row[0] if row else None
 
 
 def summary(project):
@@ -456,6 +604,12 @@ def cmd_stats(args, conn, project):
     return 0
 
 
+def cmd_prune(args, conn, project):
+    events, sessions = prune(conn, args.events_days, args.sessions_days)
+    print(f"pruned {events} event(s), {sessions} session(s)")
+    return 0
+
+
 def cmd_run(args, conn, project):
     now = time.time()
     if args.action == "start":
@@ -562,6 +716,12 @@ def build_parser():
     finish.add_argument("slug")
     finish.add_argument("--outcome", choices=("done", "stopped"), required=True)
     p.set_defaults(fn=cmd_run)
+
+    # Global by design: no `scoped` parent, no --project — retention crosses every project.
+    p = sub.add_parser("prune", help="delete events and idle sessions past their retention (every project)")
+    p.add_argument("--events-days", type=int, default=EVENT_DAYS, dest="events_days")
+    p.add_argument("--sessions-days", type=int, default=SESSION_DAYS, dest="sessions_days")
+    p.set_defaults(fn=cmd_prune)
 
     p = sub.add_parser("evals", parents=[scoped], help="scores of the latest (or named) eval suite")
     p.add_argument("--suite", default=None)

@@ -82,9 +82,24 @@ fi
 
 printf '%d files changed in %s\n' "$changed" "$DEST"
 
+# The installer never deletes, so an upgrade from a version that shipped a Stop hook leaves the
+# old script on disk and its registration in settings.json — and the trimmed lib/common.py makes
+# that script print a hook error at the end of every turn. Say exactly what to remove.
+if [ -e "$DEST/hooks/stop.py" ] || grep -q '"Stop"' "$DEST/settings.json" 2>/dev/null; then
+  cat <<NOTE
+
+This setup no longer ships a Stop hook, but this machine still has stale pieces of one:
+  - delete the "Stop" entry under "hooks" in $DEST/settings.json (back the file up first)
+  - remove $DEST/hooks/stop.py and $DEST/hooks/lib/token_efficiency.py
+  - remove $DEST/state if it exists (session state now lives in the brain)
+Until then the old script runs at every turn end and reports a hook error.
+NOTE
+fi
+
 # Copying the hook scripts does not activate them: Claude Code only runs hooks listed under the
-# `hooks` key of settings.json. Saying nothing here would leave the whole safety layer — the
-# verification gate, the .agentignore guard, the review nudge — silently inert.
+# `hooks` key of settings.json. Saying nothing here would leave the whole layer — the routing
+# frame, the destructive-command and .agentignore guards, the concurrency valve, the RED/GREEN
+# ledger — silently inert. No Stop hook is shipped: nothing here ends a turn.
 if ! grep -q '"hooks"' "$DEST/settings.json" 2>/dev/null; then
   cat <<'NOTE'
 
@@ -99,8 +114,7 @@ your settings.json (merging with what is already there):
     "PreToolUse":      [{"matcher": "Bash|Read|Edit|Write|MultiEdit|NotebookEdit|NotebookRead|Task|Agent",
                          "hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/pre_tool_use.py\"",   "timeout": 5}]}],
     "PostToolUse":     [{"matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit|Task|Agent",
-                         "hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/post_tool_use.py\"",  "timeout": 5}]}],
-    "Stop":            [{"hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/stop.py\"",           "timeout": 5}]}]
+                         "hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/post_tool_use.py\"",  "timeout": 5}]}]
   }
 
 Back the file up first. Verify with: bash .claude/hooks/tests/run.sh

@@ -2,9 +2,8 @@
 """Contract tests for the SQLite brain.
 
 The brain is machine-wide state under the user's home, so every test here points
-``GENTIC_BRAIN`` at a private temporary file — the same reason ``CLAUDE_HOOK_STATE_DIR``
-exists for the session ledger. A test that forgets the override would write into the user's
-real memory; the harness (``run.sh``) exports the variable for the same reason.
+``GENTIC_BRAIN`` at a private temporary file. A test that forgets the override would write into
+the user's real memory; the harness (``run.sh``) exports the variable for the same reason.
 """
 
 import json
@@ -23,7 +22,6 @@ HOOKS = Path(__file__).resolve().parent.parent
 REPO = HOOKS.parents[1]
 BRAIN = HOOKS / "lib" / "brain.py"
 POST = HOOKS / "post_tool_use.py"
-STOP = HOOKS / "stop.py"
 SESSION_START = HOOKS / "session_start.py"
 
 
@@ -32,15 +30,13 @@ class BrainCase(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp(prefix="brain-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self.db = self.tmp / "brain.sqlite"
-        self.state = self.tmp / "state"
-        self.state.mkdir()
         self.repo = self.tmp / "proj-alpha"
         (self.repo / ".git").mkdir(parents=True)
         (self.repo / "src").mkdir()
         self.session = f"s-{uuid.uuid4().hex[:8]}"
 
     def env(self, **extra):
-        env = dict(os.environ, GENTIC_BRAIN=str(self.db), CLAUDE_HOOK_STATE_DIR=str(self.state))
+        env = dict(os.environ, GENTIC_BRAIN=str(self.db))
         env.pop("GENTIC_BRAIN_NO_FTS", None)
         env.update({k: str(v) for k, v in extra.items()})
         return env
@@ -71,15 +67,6 @@ class BrainCase(unittest.TestCase):
             "hook_event_name": "PostToolUse", "tool_name": "Bash",
             "tool_input": {"command": command}, "tool_output": {"exit_code": exit_code},
         }, **extra)
-
-    def edit_post(self, path="src/app.py", **extra):
-        return self.hook(POST, {
-            "hook_event_name": "PostToolUse", "tool_name": "Edit",
-            "tool_input": {"file_path": str(self.repo / path)},
-        }, **extra)
-
-    def stop(self, message, **extra):
-        return self.hook(STOP, {"hook_event_name": "Stop", "last_assistant_message": message}, **extra)
 
     def rows(self, sql):
         if not self.db.exists():
@@ -142,12 +129,18 @@ class HooksWriteEvents(BrainCase):
         self.assertNotIn("abc123", latest, "secret stored verbatim")
         self.assertIn("***", latest)
 
-        self.session = f"s-{uuid.uuid4().hex[:8]}"
-        self.edit_post()
-        code, _, _ = self.stop("Done — everything is passing.")
-        self.assertEqual(code, 2, "the verification gate should still block")
-        self.assertEqual(len(self.rows("select * from events where kind = 'gate_block'")), 1)
-        self.assertEqual(len(self.rows("select * from events where kind = 'nudge_tdd'")), 1)
+    def test_events_carry_the_open_run(self):
+        """An event belongs to the project's open run, so a run's RED/GREEN history is one query."""
+        self.bash_post("pytest -x", exit_code=1)
+        self.assertIsNone(self.rows("select run from events order by id desc limit 1")[0]["run"],
+                          "a project with no runs must tag NULL")
+        self.ok("run", "start", "alpha", "--goal", "x")
+        self.bash_post("pytest -x", exit_code=1)
+        self.assertEqual(self.rows("select run from events order by id desc limit 1")[0]["run"], "alpha")
+        self.ok("run", "finish", "alpha", "--outcome", "done")
+        self.bash_post("pytest -x", exit_code=0)
+        self.assertIsNone(self.rows("select run from events order by id desc limit 1")[0]["run"],
+                          "a finished run must not tag later events")
 
     def test_brain_failure_is_invisible_to_hooks(self):
         blocker = self.tmp / "blocker.txt"
@@ -158,12 +151,6 @@ class HooksWriteEvents(BrainCase):
         self.assertEqual(code, 0)
         self.assertNotIn("hook error", out)
         self.assertEqual(out, "", "post_tool_use must stay silent")
-        self.assertEqual(err, "")
-
-        self.edit_post(GENTIC_BRAIN=bad)
-        code, out, err = self.stop("Still working on it.", GENTIC_BRAIN=bad)
-        self.assertEqual(code, 0)
-        self.assertNotIn("hook error", out)
         self.assertEqual(err, "")
 
         sys.path.insert(0, str(HOOKS))
@@ -243,6 +230,102 @@ class RunsAndStamps(BrainCase):
         self.assertEqual(len(self.rows("select * from stamps")), 3, "a second run must add its own rows")
 
 
+# The pre-migration shape of the tables a version-0 brain carries, inlined so the fixture does
+# not depend on whatever brain.SCHEMA says today.
+OLD_DDL = (
+    "CREATE TABLE notes (id INTEGER PRIMARY KEY, ts REAL, project TEXT, run TEXT, key TEXT, body TEXT, tags TEXT)",
+    "CREATE TABLE events (id INTEGER PRIMARY KEY, ts REAL, project TEXT, session TEXT, kind TEXT, detail TEXT, data TEXT)",
+    "CREATE TABLE lessons (id INTEGER PRIMARY KEY, ts REAL, project TEXT, run TEXT, item TEXT, rung INTEGER,"
+    " points INTEGER, caught_by TEXT, cause TEXT, note TEXT)",
+    "CREATE TABLE eval_runs (id INTEGER PRIMARY KEY, ts REAL, project TEXT, suite TEXT, case_name TEXT, arm TEXT,"
+    " run_index INTEGER, model TEXT, cost_usd REAL, turns INTEGER, is_error INTEGER, skipped INTEGER,"
+    " exhausted INTEGER DEFAULT 0)",
+)
+INDEXES = ("idx_events_project_ts", "idx_events_run", "idx_notes_project_ts", "idx_lessons_project_ts",
+           "idx_runs_project_finished")
+
+
+class Migrations(BrainCase):
+    def brain_module(self):
+        sys.path.insert(0, str(HOOKS / "lib"))
+        os.environ["GENTIC_BRAIN"] = str(self.db)
+        self.addCleanup(os.environ.pop, "GENTIC_BRAIN", None)
+        self.addCleanup(sys.path.remove, str(HOOKS / "lib"))
+        import brain
+        return brain
+
+    def test_old_brain_is_migrated_in_place(self):
+        with sqlite3.connect(self.db) as conn:
+            for statement in OLD_DDL:
+                conn.execute(statement)
+            conn.execute("insert into notes (ts, project, key, body) values (1, 'p', 'k', 'b')")
+            conn.execute("insert into lessons (ts, project, item, rung, points) values (1, 'p', 'i', 1, 1)")
+            conn.execute("insert into events (ts, project, kind, detail) values (1, 'p', 'red', 'pytest')")
+            self.assertEqual(conn.execute("pragma user_version").fetchone()[0], 0)
+        brain = self.brain_module()
+        self.assertEqual(brain.SCHEMA_VERSION, 2)
+        brain.connect().close()
+        with sqlite3.connect(self.db) as conn:
+            self.assertEqual(conn.execute("pragma user_version").fetchone()[0], 2)
+            self.assertIn("sessions", [r[0] for r in conn.execute("select name from sqlite_master where type='table'")])
+            self.assertIn("run", [r[1] for r in conn.execute("pragma table_info(events)")])
+            indexes = {r[0] for r in conn.execute("select name from sqlite_master where type='index'")}
+            self.assertTrue(set(INDEXES) <= indexes, f"missing indexes: {set(INDEXES) - indexes}")
+            self.assertEqual(conn.execute("select key, body from notes").fetchall(), [("k", "b")])
+            self.assertEqual(conn.execute("select item from lessons").fetchall(), [("i",)])
+            self.assertEqual(conn.execute("select kind, run from events").fetchall(), [("red", None)],
+                             "existing events must keep run = NULL (no backfill)")
+        brain.connect().close()   # a second open is a no-op and raises nothing
+        with sqlite3.connect(self.db) as conn:
+            self.assertEqual(conn.execute("pragma user_version").fetchone()[0], 2)
+
+    def test_new_brain_starts_at_the_current_version(self):
+        brain = self.brain_module()
+        brain.connect().close()
+        with sqlite3.connect(self.db) as conn:
+            self.assertEqual(conn.execute("pragma user_version").fetchone()[0], brain.SCHEMA_VERSION)
+            self.assertIn("sessions", [r[0] for r in conn.execute("select name from sqlite_master where type='table'")])
+
+
+DAY = 86400
+
+
+class Prune(BrainCase):
+    """Events and sessions are the only tables that grow on their own; retention bounds them."""
+
+    def seed(self):
+        now = time.time()
+        self.ok("sql", "create table if not exists sessions (id text primary key, agents_in_flight integer not null default 0, updated real)")
+        with sqlite3.connect(self.db) as conn:
+            for age, project in ((1, "proj-alpha"), (60, "proj-alpha"), (120, "other")):
+                conn.execute("insert into events (ts, project, kind, detail) values (?, ?, 'red', 'x')",
+                             (now - age * DAY, project))
+            for age, sid in ((1, "fresh"), (30, "stale")):
+                conn.execute("insert into sessions (id, agents_in_flight, updated) values (?, 0, ?)",
+                             (sid, now - age * DAY))
+
+    def test_prune_removes_old_events_and_sessions(self):
+        self.seed()
+        self.assertEqual(self.ok("prune").strip(), "pruned 1 event(s), 1 session(s)")
+        self.assertEqual(len(self.rows("select * from events")), 2, "young events must survive")
+        self.assertEqual([r["id"] for r in self.rows("select id from sessions")], ["fresh"])
+
+        with sqlite3.connect(self.db) as conn:   # a fresh fixture, same shape
+            conn.execute("delete from events")
+            conn.execute("delete from sessions")
+        self.seed()
+        self.assertEqual(self.ok("prune", "--events-days", "30").strip(), "pruned 2 event(s), 1 session(s)")
+
+    def test_session_start_prunes_silently_and_never_creates(self):
+        payload = {"hook_event_name": "SessionStart"}
+        _, out, err = self.hook(SESSION_START, dict(payload))
+        self.assertFalse(self.db.exists(), "a session start must not create the brain")
+        self.seed()
+        _, pruned_out, pruned_err = self.hook(SESSION_START, dict(payload))
+        self.assertEqual((pruned_out, pruned_err), (out, err), "the prune must be silent")
+        self.assertEqual(len(self.rows("select * from events")), 2, "the 120-day event survived a session start")
+
+
 class SessionStart(BrainCase):
     def test_session_start_mentions_brain_when_it_has_something(self):
         payload = {"hook_event_name": "SessionStart"}
@@ -261,8 +344,10 @@ class Documentation(unittest.TestCase):
         for token in ("brain.sqlite", "GENTIC_BRAIN", "sql", ".bak", "iCloud"):
             self.assertIn(token, readme, f"README does not mention {token!r}")
         hooks_readme = (HOOKS / "README.md").read_text(encoding="utf-8")
-        for kind in ("red", "verification", "gate_block", "nudge_tdd", "nudge_review", "nudge_spend"):
+        for kind in ("red", "verification"):
             self.assertIn(kind, hooks_readme, f"hooks README does not list the {kind} event")
+        for kind in ("gate_block", "nudge_tdd", "nudge_review", "nudge_spend"):
+            self.assertNotIn(kind, hooks_readme, f"hooks README still lists the {kind} event")
         self.assertIn("silent", hooks_readme)
 
     def test_harness_registers_and_isolates_the_brain_suite(self):

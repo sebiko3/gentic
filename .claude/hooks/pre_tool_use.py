@@ -21,7 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib import agentignore, common, token_efficiency  # noqa: E402
+from lib import agentignore, brain, common  # noqa: E402
 
 # What each tool needs permission to do.
 READ_TOOLS = {"Read", "NotebookRead"}
@@ -137,41 +137,6 @@ def dangerous_rm(argv):
     return None
 
 
-def duplicate_read_guard(payload, tool_input, cwd):
-    """Deny a repeat Read of an unchanged file — once per path, valve always open.
-
-    State is saved *before* blocking (the verification gate's pattern): the fired-marker must
-    be durable by the time the model retries, so the retry passes unconditionally.
-    """
-    session_id = payload.get("session_id")
-    if not session_id:
-        return None
-    state = common.load_state(session_id)
-    session = state.setdefault("session", {})
-    reason = token_efficiency.check_read(session, tool_input, cwd)
-    estimate = token_efficiency.read_estimate(tool_input, cwd)
-    if reason:
-        token_efficiency.note_saved(session, estimate)
-    else:
-        token_efficiency.note_read(session, estimate)
-    common.save_state(session_id, state)
-    if reason:
-        common.block(reason)
-
-
-def bare_cat_guard(payload, command, cwd):
-    """Deny a bare cat of one large file — once per path, same valve ledger as the read guard."""
-    session_id = payload.get("session_id")
-    if not session_id:
-        return None
-    state = common.load_state(session_id)
-    session = state.setdefault("session", {})
-    reason = token_efficiency.check_cat(session, command, cwd)
-    common.save_state(session_id, state)
-    if reason:
-        common.block(reason)
-
-
 SUBAGENT_TOOLS = {"Task", "Agent"}
 MAX_IN_FLIGHT = 5   # Fibonacci; runaway fan-out is how a run burns its budget without converging
 
@@ -182,21 +147,17 @@ FAN_OUT = ("Five subagents are already in flight. Wait for one to return before 
 def concurrency_valve(payload, tool_input):
     """Deny a sixth concurrent foreground subagent. A cap, not a once-only valve.
 
-    Background spawns return immediately and are not counted. The counter is a session fact,
-    locked against parallel hook processes and reset at every user prompt.
+    Background spawns return immediately and are not counted. The counter lives in the brain's
+    sessions table — one atomic UPDATE under SQLite's own lock, so five spawns issued in one
+    message are all seen — and is reset at every user prompt. No brain, no cap.
     """
     if tool_input.get("run_in_background"):
         return None
     session_id = payload.get("session_id")
     if not session_id:
         return None
-    with common.session_lock(session_id):
-        state = common.load_state(session_id)
-        session = state.setdefault("session", {})
-        if int(session.get("agents_in_flight") or 0) >= MAX_IN_FLIGHT:
-            return deny(FAN_OUT)
-        session["agents_in_flight"] = int(session.get("agents_in_flight") or 0) + 1
-        common.save_state(session_id, state)
+    if not brain.session_acquire(session_id, MAX_IN_FLIGHT):
+        return deny(FAN_OUT)
     return None
 
 
@@ -304,8 +265,6 @@ def main():
         )
         if reason:
             return deny(reason)
-        if tool == "Read":
-            return duplicate_read_guard(payload, tool_input, cwd)
         return None
 
     if tool in SUBAGENT_TOOLS:
@@ -340,8 +299,6 @@ def main():
     reason = check_bash(command, cwd)
     if reason:
         return deny(reason)
-
-    bare_cat_guard(payload, command, cwd)
 
 
 if __name__ == "__main__":

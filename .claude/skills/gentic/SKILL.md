@@ -83,10 +83,15 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 ## Autonomous runs
 
 When `AskUserQuestion` is unavailable the run is autonomous. Every phase gate is then crossed in
-the same session without pausing for confirmation, defaults are adopted and flagged
-`default — unconfirmed`, and the only legitimate stops are rung 5, rung 8, budget exhaustion, or
-a blocker no default can resolve. Ending a turn to "flag" or to "let the user object" is a stop,
-and it is the failure the fitness suite measures (`csv-export-probe`).
+the same session without pausing for confirmation, and defaults are adopted and flagged
+`default — unconfirmed`. Nothing inside the run is a legitimate stop: rung 5 and rung 8 are
+taken autonomously (the spec is amended, the Interview re-run under its non-interactive rule,
+every changed decision flagged), an exhausted budget escalates to the next rung instead of
+halting, and a blocker no default can resolve gets the most conservative option consistent with
+the masterprompt, flagged. The run ends when every Definition of Done item is proven, and
+never a stop before that. Only the `STOP` file ends a run early (`docs/gentic/<run>/STOP`, the
+user's own kill switch). Ending a turn to "flag", to "check in" or to "let the user object" is the
+failure the fitness suite measures (`csv-export-probe`).
 
 ## Red flags — stop and re-read this skill
 
