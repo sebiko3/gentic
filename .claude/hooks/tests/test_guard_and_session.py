@@ -3,6 +3,7 @@
 
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -18,10 +19,10 @@ POST = HOOKS / "post_tool_use.py"
 PROMPT = HOOKS / "user_prompt_submit.py"
 
 
-def run(script, payload, state_dir=None):
+def run(script, payload, brain=None):
     env = dict(os.environ)
-    if state_dir:
-        env["CLAUDE_HOOK_STATE_DIR"] = state_dir
+    if brain:
+        env["GENTIC_BRAIN"] = str(brain)
     proc = subprocess.run(
         [sys.executable, str(script)],
         input=json.dumps(payload),
@@ -122,7 +123,8 @@ class ConcurrencyValve(unittest.TestCase):
     reset at every user prompt, blind to background spawns by design."""
 
     def setUp(self):
-        self.state = tempfile.mkdtemp()
+        self.tmp = Path(tempfile.mkdtemp())
+        self.state = self.tmp / "brain.sqlite"
         self.session = f"s-{uuid.uuid4().hex[:8]}"
 
     def spawn_payload(self, background=False):
@@ -140,8 +142,11 @@ class ConcurrencyValve(unittest.TestCase):
             return None
 
     def count(self):
-        path = Path(self.state) / f"{self.session}.json"
-        return json.loads(path.read_text()).get("session", {}).get("agents_in_flight", 0) if path.exists() else 0
+        if not self.state.exists():
+            return 0
+        with sqlite3.connect(self.state) as conn:
+            row = conn.execute("select agents_in_flight from sessions where id = ?", (self.session,)).fetchone()
+        return row[0] if row else 0
 
     def test_concurrency_valve_denies_a_sixth_agent(self):
         for _ in range(5):
@@ -169,7 +174,7 @@ class ConcurrencyValve(unittest.TestCase):
         self.assertEqual(self.decision(out), "deny", "a background return freed a foreground slot")
 
     def test_valve_counts_parallel_spawns(self):
-        env = dict(os.environ, CLAUDE_HOOK_STATE_DIR=self.state)
+        env = dict(os.environ, GENTIC_BRAIN=str(self.state))
         procs = [subprocess.Popen([sys.executable, str(PRE)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                   stderr=subprocess.PIPE, text=True, env=env) for _ in range(5)]
         for proc in procs:
@@ -181,6 +186,17 @@ class ConcurrencyValve(unittest.TestCase):
             run(PRE, self.spawn_payload(), self.state)
         run(PROMPT, {"hook_event_name": "UserPromptSubmit", "prompt": "next", "session_id": self.session}, self.state)
         self.assertEqual(self.count(), 0)
+
+    def test_valve_fails_open_without_a_brain(self):
+        """An unopenable brain means an uncapped valve, silently — better than a blocked session."""
+        blocker = self.tmp / "blocker.txt"
+        blocker.write_text("not a directory")
+        bad = blocker / "deeper" / "brain.sqlite"
+        for _ in range(6):
+            code, out, err = run(PRE, self.spawn_payload(), bad)
+            self.assertEqual(code, 0)
+            self.assertIsNone(self.decision(out), "a spawn was denied although no brain could count it")
+            self.assertEqual(err, "", "the hook must say nothing about the brain")
 
 
 class SessionStart(unittest.TestCase):
@@ -194,7 +210,7 @@ class SessionStart(unittest.TestCase):
             code, out, err = run(SESSION, {
                 "hook_event_name": "SessionStart", "how": "startup", "cwd": str(root),
                 "session_id": "sess-1",
-            }, state_dir=str(root / "state"))
+            }, brain=str(root / "brain.sqlite"))
             self.assertEqual(code, 0, err)
             self.assertIn("demo-run", out)
 
@@ -207,13 +223,13 @@ class SessionStart(unittest.TestCase):
             (run_dir / "progress.md").write_text("## Phases\n- [x] 1 Scout\n- [x] 2 Interview\n")
             self.assertEqual(run(SESSION, {
                 "hook_event_name": "SessionStart", "how": "startup", "cwd": str(root),
-            }, state_dir=str(root / "state"))[1].strip(), "")
+            }, brain=str(root / "brain.sqlite"))[1].strip(), "")
 
     def test_silent_outside_a_git_repository(self):
         with tempfile.TemporaryDirectory() as d:
             code, out, err = run(SESSION, {
                 "hook_event_name": "SessionStart", "how": "startup", "cwd": d,
-            }, state_dir=d)
+            }, brain=str(Path(d) / "brain.sqlite"))
             self.assertEqual(code, 0)
             self.assertEqual(out.strip(), "")
             self.assertNotIn("Traceback", err)

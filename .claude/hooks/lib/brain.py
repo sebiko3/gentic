@@ -31,6 +31,7 @@ DEFAULT_PATH = Path.home() / ".claude" / "gentic" / "brain.sqlite"
 
 # Fibonacci-derived balancing values (house rule).
 BUSY_TIMEOUT = 0.034   # seconds a hot-path write may wait on a lock
+SESSION_TIMEOUT = 0.144  # seconds; the valve is contended by up to five parallel spawns
 RECALL_LIMIT = 8       # notes printed by default
 DETAIL_CHARS = 300     # matches post_tool_use.py's command trim
 PREFERENCE_MIN = 2     # agreeing user decisions before a preference is learned
@@ -211,6 +212,65 @@ def record_event(cwd, session, kind, detail, data=None):
     except Exception:
         # A brain that cannot be opened, created or locked in time is invisible to the session.
         return False
+
+
+# --- session state (the concurrency valve's counter) -----------------------------------------
+#
+# Best-effort like record_event: nothing here raises, prints, or waits past its busy timeout.
+# A brain that cannot be opened fails OPEN — session_acquire says yes — because an uncapped
+# fan-out is preferred to a blocked session. Sessions are keyed by session id alone; they need
+# no project, and any hook may create the file, exactly as the JSON state file was created.
+
+def _session_write(fn):
+    try:
+        conn = connect(timeout=SESSION_TIMEOUT)
+        try:
+            result = fn(conn)
+            conn.commit()
+            return result
+        finally:
+            conn.close()
+    except Exception:
+        return None
+
+
+def session_reset(session_id):
+    """Zero the session's in-flight counter (a new user prompt). True when written."""
+    def write(conn):
+        conn.execute(
+            "INSERT INTO sessions (id, agents_in_flight, updated) VALUES (?, 0, ?)"
+            " ON CONFLICT(id) DO UPDATE SET agents_in_flight = 0, updated = excluded.updated",
+            (session_id, time.time()),
+        )
+        return True
+    return _session_write(write) or False
+
+
+def session_acquire(session_id, cap):
+    """Take one in-flight slot if fewer than `cap` are taken. True when taken — or when no
+    brain could count (fail open)."""
+    def write(conn):
+        conn.execute("INSERT OR IGNORE INTO sessions (id, agents_in_flight, updated) VALUES (?, 0, ?)",
+                     (session_id, time.time()))
+        taken = conn.execute(
+            "UPDATE sessions SET agents_in_flight = agents_in_flight + 1, updated = ?"
+            " WHERE id = ? AND agents_in_flight < ?",
+            (time.time(), session_id, cap),
+        ).rowcount
+        return taken == 1
+    result = _session_write(write)
+    return True if result is None else result
+
+
+def session_release(session_id):
+    """Free one in-flight slot (floor 0). True when written."""
+    def write(conn):
+        conn.execute(
+            "UPDATE sessions SET agents_in_flight = MAX(agents_in_flight - 1, 0), updated = ? WHERE id = ?",
+            (time.time(), session_id),
+        )
+        return True
+    return _session_write(write) or False
 
 
 def open_run(conn, project):

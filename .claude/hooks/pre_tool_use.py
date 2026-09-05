@@ -21,7 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib import agentignore, common, token_efficiency  # noqa: E402
+from lib import agentignore, brain, common, token_efficiency  # noqa: E402
 
 # What each tool needs permission to do.
 READ_TOOLS = {"Read", "NotebookRead"}
@@ -182,21 +182,17 @@ FAN_OUT = ("Five subagents are already in flight. Wait for one to return before 
 def concurrency_valve(payload, tool_input):
     """Deny a sixth concurrent foreground subagent. A cap, not a once-only valve.
 
-    Background spawns return immediately and are not counted. The counter is a session fact,
-    locked against parallel hook processes and reset at every user prompt.
+    Background spawns return immediately and are not counted. The counter lives in the brain's
+    sessions table — one atomic UPDATE under SQLite's own lock, so five spawns issued in one
+    message are all seen — and is reset at every user prompt. No brain, no cap.
     """
     if tool_input.get("run_in_background"):
         return None
     session_id = payload.get("session_id")
     if not session_id:
         return None
-    with common.session_lock(session_id):
-        state = common.load_state(session_id)
-        session = state.setdefault("session", {})
-        if int(session.get("agents_in_flight") or 0) >= MAX_IN_FLIGHT:
-            return deny(FAN_OUT)
-        session["agents_in_flight"] = int(session.get("agents_in_flight") or 0) + 1
-        common.save_state(session_id, state)
+    if not brain.session_acquire(session_id, MAX_IN_FLIGHT):
+        return deny(FAN_OUT)
     return None
 
 

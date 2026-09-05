@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib import common  # noqa: E402
+from lib import brain, common  # noqa: E402
 
 LENGTH_THRESHOLD = 240
 SHORT_PROMPT = 80
@@ -118,6 +118,7 @@ def main():
     # This hook fires exactly once per user prompt, so it owns the turn boundary that the
     # verification gate depends on. Must happen before any early return.
     common.begin_turn(payload)
+    brain.session_reset(payload.get("session_id"))
 
     is_non_trivial, reason, matched = detect(prompt)
     if not is_non_trivial:
