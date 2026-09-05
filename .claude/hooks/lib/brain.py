@@ -238,6 +238,9 @@ def _session_write(fn):
 
 def session_reset(session_id):
     """Zero the session's in-flight counter (a new user prompt). True when written."""
+    if not session_id:
+        return False
+
     def write(conn):
         conn.execute(
             "INSERT INTO sessions (id, agents_in_flight, updated) VALUES (?, 0, ?)"
@@ -251,6 +254,9 @@ def session_reset(session_id):
 def session_acquire(session_id, cap):
     """Take one in-flight slot if fewer than `cap` are taken. True when taken — or when no
     brain could count (fail open)."""
+    if not session_id:
+        return True
+
     def write(conn):
         conn.execute("INSERT OR IGNORE INTO sessions (id, agents_in_flight, updated) VALUES (?, 0, ?)",
                      (session_id, time.time()))
@@ -266,6 +272,9 @@ def session_acquire(session_id, cap):
 
 def session_release(session_id):
     """Free one in-flight slot (floor 0). True when written."""
+    if not session_id:
+        return False
+
     def write(conn):
         conn.execute(
             "UPDATE sessions SET agents_in_flight = MAX(agents_in_flight - 1, 0), updated = ? WHERE id = ?",

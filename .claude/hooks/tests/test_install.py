@@ -74,6 +74,25 @@ class InstallContract(unittest.TestCase):
         for phrase in ("verification gate", "review nudge"):
             self.assertNotIn(phrase, comment, f"installer comment still names the {phrase}")
 
+    def test_upgrade_notice_names_the_stale_stop_hook(self):
+        """A machine that installed the previous version keeps a registered Stop hook and the old
+        script on disk; the installer never deletes, so it must say what to remove."""
+        (self.dest / "hooks").mkdir()
+        (self.dest / "hooks" / "stop.py").write_text("# stale\n")
+        (self.dest / "settings.json").write_text(
+            '{"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "python3 stop.py"}]}]}}')
+        result = run(dest=self.dest)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for needle in ('"Stop"', "hooks/stop.py", "hooks/lib/token_efficiency.py"):
+            self.assertIn(needle, result.stdout, f"upgrade notice does not name {needle}")
+        self.assertTrue((self.dest / "hooks" / "stop.py").exists(), "the installer must not delete")
+
+        clean = Path(tempfile.mkdtemp(prefix="claude-home-"))
+        self.addCleanup(shutil.rmtree, clean, True)
+        (clean / "settings.json").write_text('{"hooks": {"PreToolUse": []}}')
+        quiet = run(dest=clean)
+        self.assertNotIn("stale", quiet.stdout, "a clean install must print no upgrade notice")
+
     def test_run_sh_stays_executable(self):
         run(dest=self.dest)
         self.assertTrue(os.access(self.dest / "hooks/tests/run.sh", os.X_OK))

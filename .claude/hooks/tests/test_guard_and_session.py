@@ -187,6 +187,21 @@ class ConcurrencyValve(unittest.TestCase):
         run(PROMPT, {"hook_event_name": "UserPromptSubmit", "prompt": "next", "session_id": self.session}, self.state)
         self.assertEqual(self.count(), 0)
 
+    def test_missing_session_id_writes_no_session_row(self):
+        """A payload without a session id (the hostile-input sweep sends them) must not leave a
+        NULL-keyed row that no later reset or release can ever match."""
+        run(PROMPT, {"hook_event_name": "UserPromptSubmit", "prompt": "next"}, self.state)
+        payload = self.spawn_payload()
+        del payload["session_id"]
+        run(PRE, payload, self.state)
+        run(POST, {"hook_event_name": "PostToolUse", "tool_name": "Task",
+                   "tool_input": {"subagent_type": "general-purpose"}}, self.state)
+        rows = 0
+        if self.state.exists():
+            with sqlite3.connect(self.state) as conn:
+                rows = conn.execute("select count(*) from sessions").fetchone()[0]
+        self.assertEqual(rows, 0, "a session row was written without a session id")
+
     def test_valve_fails_open_without_a_brain(self):
         """An unopenable brain means an uncapped valve, silently — better than a blocked session."""
         blocker = self.tmp / "blocker.txt"

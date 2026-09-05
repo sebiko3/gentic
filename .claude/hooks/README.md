@@ -11,7 +11,7 @@ Built by the gentic run `2026-08-17-universal-claude-setup`
 
 1. **A hook may never break a session.** Every script exits 0 on its own errors, surfacing the
    problem as `systemMessage`. Only deliberate policy decisions use exit 2.
-2. **No LLM calls on hot paths.** `UserPromptSubmit`, `PostToolUse` and `Stop` fire constantly;
+2. **No LLM calls on hot paths.** `UserPromptSubmit`, `PreToolUse` and `PostToolUse` fire constantly;
    they are pure Python, standard library only.
 3. **Silence is the default branch.** Hooks emit nothing unless a rule actually fires.
 4. **Never interpolate payload fields into a shell string.** JSON is parsed in Python.
