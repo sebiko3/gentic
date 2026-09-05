@@ -115,9 +115,9 @@ def main():
     payload = common.read_payload()
     prompt = str(payload.get("prompt") or "")
 
-    # This hook fires exactly once per user prompt, so it owns the turn boundary that the
-    # verification gate depends on. Must happen before any early return.
-    common.begin_turn(payload)
+    # This hook fires exactly once per user prompt: a new prompt has no foreground subagents in
+    # flight, so the concurrency valve's counter starts from zero. Must happen before any early
+    # return.
     brain.session_reset(payload.get("session_id"))
 
     is_non_trivial, reason, matched = detect(prompt)

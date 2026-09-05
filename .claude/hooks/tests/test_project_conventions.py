@@ -244,6 +244,14 @@ class Authorizations(unittest.TestCase):
         self.assertEqual(listed.returncode, 0)
         self.assertEqual(listed.stdout, "push\nopen-pr\n")
 
+    def test_trust_file_derives_from_the_brain_path(self):
+        """The trust file sits beside the brain, not beside a state directory that no longer exists."""
+        sys.path.insert(0, str(HELPER.parent))
+        self.addCleanup(sys.path.remove, str(HELPER.parent))
+        import project_conventions
+        self.assertEqual(project_conventions.TRUST_FILE,
+                         project_conventions.brain.DEFAULT_PATH.parent / "trusted-projects")
+
     def test_authorized_fails_closed(self):
         repo = make_repo(claude_md=self.GRANTS)
         untrusted = helper("authorized", "push", root=repo, env=self.env())

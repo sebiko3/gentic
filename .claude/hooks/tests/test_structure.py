@@ -13,6 +13,9 @@ Every rule below exists to make that specific failure impossible to reintroduce.
 import json
 import os
 import re
+import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -499,6 +502,65 @@ class ReleaseLane(unittest.TestCase):
         body = self.lowered("README.md")
         self.assertIn("## the release lane", body)
         self.assertIn("release.py", body)
+
+
+class InfiniteAutonomy(unittest.TestCase):
+    """No hook ends a turn and no rule ends a run on its own. The Stop hook, the token guards and
+    the per-turn ledger are gone; the harness sweeps four hooks; the only early end is `STOP`."""
+
+    HOOKS = CLAUDE / "hooks"
+    GONE = ("token_efficiency", "load_state", "save_state", "session_lock", "begin_turn",
+            "load_turn_state", "STATE_DIR", "CLAUDE_HOOK_STATE_DIR", "prune_state")
+
+    def hook_sources(self):
+        return sorted(self.HOOKS.glob("*.py")) + sorted((self.HOOKS / "lib").glob("*.py"))
+
+    def pre_tool_use(self, tool_input, tool_name, session, brain_path, cwd):
+        payload = {"hook_event_name": "PreToolUse", "tool_name": tool_name, "tool_input": tool_input,
+                   "session_id": session, "cwd": str(cwd)}
+        proc = subprocess.run([sys.executable, str(self.HOOKS / "pre_tool_use.py")], input=json.dumps(payload),
+                              env=dict(os.environ, GENTIC_BRAIN=str(brain_path)), text=True,
+                              capture_output=True, timeout=15)
+        decision = None
+        if proc.stdout.strip():
+            decision = json.loads(proc.stdout).get("hookSpecificOutput", {}).get("permissionDecision")
+        return proc.returncode, decision
+
+    def test_stop_hook_and_token_guards_are_gone(self):
+        for gone in ("stop.py", "lib/token_efficiency.py"):
+            self.assertFalse((self.HOOKS / gone).exists(), f".claude/hooks/{gone} still exists")
+        offenders = []
+        for path in self.hook_sources():
+            text = path.read_text(encoding="utf-8")
+            for name in self.GONE:
+                if name in text:
+                    offenders.append(f"{path.name}: {name}")
+            if re.search(r"\bblock\s*\(", text):
+                offenders.append(f"{path.name}: block(")
+        self.assertEqual(offenders, [], "dead state code still referenced:\n" + "\n".join(offenders))
+
+        tmp = Path(tempfile.mkdtemp())
+        (tmp / ".git").mkdir()
+        big = tmp / "big.txt"
+        big.write_text("x" * 100 * 1024)
+        session = "structure-guards"
+        brain_path = tmp / "brain.sqlite"
+        for _ in range(2):
+            code, decision = self.pre_tool_use({"file_path": str(big)}, "Read", session, brain_path, tmp)
+            self.assertEqual((code, decision), (0, None), "a repeated Read was denied")
+        code, decision = self.pre_tool_use({"command": f"cat {big}"}, "Bash", session, brain_path, tmp)
+        self.assertEqual((code, decision), (0, None), "a bare cat was denied")
+
+    def test_harness_has_no_stop_hook(self):
+        text = (self.HOOKS / "tests" / "run.sh").read_text(encoding="utf-8")
+        suites = next(line for line in text.splitlines() if line.startswith("for suite in"))
+        for suite in ("test_gate", "test_token_efficiency", "test_review_nudge"):
+            self.assertNotIn(suite, suites, f"{suite} still in run.sh suite list")
+        sweep = next(line for line in text.splitlines() if line.startswith("for script in"))
+        self.assertNotIn("stop", sweep.split("in", 1)[1].split(";")[0].split())
+        self.assertIn("4 hooks x 5 hostile payloads", text)
+        self.assertIn("a Stop hook is registered; this setup no longer ships one", text)
+        self.assertIn("is no longer used; delete it", text)
 
 
 class NoOrphanedSkillFiles(unittest.TestCase):

@@ -2,9 +2,8 @@
 """Contract tests for the SQLite brain.
 
 The brain is machine-wide state under the user's home, so every test here points
-``GENTIC_BRAIN`` at a private temporary file — the same reason ``CLAUDE_HOOK_STATE_DIR``
-exists for the session ledger. A test that forgets the override would write into the user's
-real memory; the harness (``run.sh``) exports the variable for the same reason.
+``GENTIC_BRAIN`` at a private temporary file. A test that forgets the override would write into
+the user's real memory; the harness (``run.sh``) exports the variable for the same reason.
 """
 
 import json
@@ -23,7 +22,6 @@ HOOKS = Path(__file__).resolve().parent.parent
 REPO = HOOKS.parents[1]
 BRAIN = HOOKS / "lib" / "brain.py"
 POST = HOOKS / "post_tool_use.py"
-STOP = HOOKS / "stop.py"
 SESSION_START = HOOKS / "session_start.py"
 
 
@@ -32,15 +30,13 @@ class BrainCase(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp(prefix="brain-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self.db = self.tmp / "brain.sqlite"
-        self.state = self.tmp / "state"
-        self.state.mkdir()
         self.repo = self.tmp / "proj-alpha"
         (self.repo / ".git").mkdir(parents=True)
         (self.repo / "src").mkdir()
         self.session = f"s-{uuid.uuid4().hex[:8]}"
 
     def env(self, **extra):
-        env = dict(os.environ, GENTIC_BRAIN=str(self.db), CLAUDE_HOOK_STATE_DIR=str(self.state))
+        env = dict(os.environ, GENTIC_BRAIN=str(self.db))
         env.pop("GENTIC_BRAIN_NO_FTS", None)
         env.update({k: str(v) for k, v in extra.items()})
         return env
@@ -71,15 +67,6 @@ class BrainCase(unittest.TestCase):
             "hook_event_name": "PostToolUse", "tool_name": "Bash",
             "tool_input": {"command": command}, "tool_output": {"exit_code": exit_code},
         }, **extra)
-
-    def edit_post(self, path="src/app.py", **extra):
-        return self.hook(POST, {
-            "hook_event_name": "PostToolUse", "tool_name": "Edit",
-            "tool_input": {"file_path": str(self.repo / path)},
-        }, **extra)
-
-    def stop(self, message, **extra):
-        return self.hook(STOP, {"hook_event_name": "Stop", "last_assistant_message": message}, **extra)
 
     def rows(self, sql):
         if not self.db.exists():
@@ -142,13 +129,6 @@ class HooksWriteEvents(BrainCase):
         self.assertNotIn("abc123", latest, "secret stored verbatim")
         self.assertIn("***", latest)
 
-        self.session = f"s-{uuid.uuid4().hex[:8]}"
-        self.edit_post()
-        code, _, _ = self.stop("Done — everything is passing.")
-        self.assertEqual(code, 2, "the verification gate should still block")
-        self.assertEqual(len(self.rows("select * from events where kind = 'gate_block'")), 1)
-        self.assertEqual(len(self.rows("select * from events where kind = 'nudge_tdd'")), 1)
-
     def test_events_carry_the_open_run(self):
         """An event belongs to the project's open run, so a run's RED/GREEN history is one query."""
         self.bash_post("pytest -x", exit_code=1)
@@ -171,12 +151,6 @@ class HooksWriteEvents(BrainCase):
         self.assertEqual(code, 0)
         self.assertNotIn("hook error", out)
         self.assertEqual(out, "", "post_tool_use must stay silent")
-        self.assertEqual(err, "")
-
-        self.edit_post(GENTIC_BRAIN=bad)
-        code, out, err = self.stop("Still working on it.", GENTIC_BRAIN=bad)
-        self.assertEqual(code, 0)
-        self.assertNotIn("hook error", out)
         self.assertEqual(err, "")
 
         sys.path.insert(0, str(HOOKS))

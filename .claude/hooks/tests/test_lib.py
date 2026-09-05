@@ -56,47 +56,19 @@ class SafeMain(unittest.TestCase):
             common.safe_main(lambda: None)
         self.assertEqual(caught.exception.code, 0)
 
-    def test_lets_deliberate_block_through(self):
-        def blocker():
-            common.block("nope")
-
-        with self.assertRaises(SystemExit) as caught:
-            common.safe_main(blocker)
-        self.assertEqual(caught.exception.code, 2)
 
 
-class State(unittest.TestCase):
-    def setUp(self):
-        self.tmp = tempfile.mkdtemp()
-        self._orig = common.STATE_DIR
-        common.STATE_DIR = Path(self.tmp)
-        self.addCleanup(lambda: setattr(common, "STATE_DIR", self._orig))
+class PublicSurface(unittest.TestCase):
+    """The session-state helpers left with the Stop hook; nothing dead may linger here."""
 
-    def test_load_missing_state_is_empty_dict(self):
-        self.assertEqual(common.load_state("nosuch"), {})
+    LIVE = {"read_payload", "emit", "emit_context", "emit_message", "safe_main", "git_root"}
 
-    def test_round_trips(self):
-        common.save_state("s1", {"evidence": [{"command": "pytest"}]})
-        self.assertEqual(len(common.load_state("s1")["evidence"]), 1)
-
-    def test_corrupt_state_file_is_treated_as_empty(self):
-        (Path(self.tmp) / "s2.json").write_text("{{{corrupt")
-        self.assertEqual(common.load_state("s2"), {})
-
-    def test_session_id_cannot_escape_state_dir(self):
-        common.save_state("../../escaped", {"x": 1})
-        self.assertEqual(list(Path(self.tmp).glob("*.json")).__len__(), 1)
-        self.assertFalse((Path(self.tmp).parent.parent / "escaped.json").exists())
-
-    def test_prune_removes_old_state_only(self):
-        common.save_state("old", {"x": 1})
-        common.save_state("new", {"x": 1})
-        old = Path(self.tmp) / "old.json"
-        ancient = time.time() - (10 * 86400)
-        os.utime(old, (ancient, ancient))
-        common.prune_state(days=7)
-        self.assertFalse(old.exists())
-        self.assertTrue((Path(self.tmp) / "new.json").exists())
+    def test_common_exports_only_the_live_helpers(self):
+        public = {name for name, value in vars(common).items()
+                  if callable(value) and getattr(value, "__module__", None) == common.__name__
+                  and not name.startswith("_")}
+        self.assertEqual(public, self.LIVE)
+        self.assertFalse(hasattr(common, "STATE_DIR"), "the JSON state directory is gone")
 
 
 class GitRoot(unittest.TestCase):

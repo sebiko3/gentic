@@ -1,28 +1,22 @@
 #!/usr/bin/env python3
-"""PostToolUse — maintain the evidence ledger behind the verification and test-first gates.
+"""PostToolUse — record RED and GREEN, and free the concurrency valve's slot.
 
-Records four things per turn: whether code (as opposed to prose) was edited, whether any of
-those edits was a test file, whether a recognised verification command succeeded, and whether
-one *failed*. `stop.py` reads the result. The verification outcome is also appended to the
-brain as a `red` or `verification` event — best-effort, so a missing brain changes nothing.
+Two things, both written to the brain and nothing else: a recognised verification command that
+exited non-zero is a ``red`` event (the RED of test-first work — "the test failed before the code
+was written" is only observable here), one that exited zero, or with no exit code available, is
+a ``verification`` event. A foreground subagent's return releases its slot in the concurrency
+valve. Every write is best-effort; a missing brain changes nothing.
 
-A failed verification run is the RED signal of test-first work, which is why it is kept rather
-than discarded: "the test failed before the code was written" is only observable here.
-
-Classification is deliberately additive. A test file sets ``test_touched`` *and* ``code_changed``
-— the verification gate keys off the latter, so a test-only turn must keep arming it.
-
-Writes state only. Never injects context, never blocks.
+Never injects context, never blocks.
 """
 
 import re
 import sys
-import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from lib import brain, common, token_efficiency  # noqa: E402
+from lib import brain, common  # noqa: E402
 
 VERIFICATION = re.compile(
     r"\b("
@@ -38,25 +32,8 @@ VERIFICATION = re.compile(
     re.I,
 )
 
-PROSE_SUFFIXES = {".md", ".markdown", ".txt", ".rst", ".adoc"}
-
-# Test files across the ecosystems this setup meets. Pure string matching, no filesystem access:
-# this runs after every edit and the suite holds the hook to a 150ms median.
-# `_test`/`test_` are anchored to a path boundary so `latest.py`, `contest.go` and `protest.ts`
-# stay production code.
-TEST_PATH = re.compile(
-    r"(^|/)(tests?|specs?|__tests__)/"           # a test directory anywhere in the path
-    r"|(^|/)test_[^/]*$"                          # test_app.py
-    r"|_test\.[a-z0-9]+$"                         # app_test.go
-    r"|\.(test|spec)\.[a-z0-9]+$"                 # app.test.ts, app.spec.js
-    r"|(^|/)[^/]*_spec\.[a-z0-9]+$",              # user_spec.rb
-    re.I,
-)
-
-# Subagents whose completion means this session's code has actually been looked at. The
-# harness has named the subagent tool both ``Task`` and ``Agent`` across versions; accept both
-# rather than tying the signal to one spelling.
-REVIEW_AGENTS = {"code-reviewer", "dod-auditor"}
+# The harness has named the subagent tool both ``Task`` and ``Agent`` across versions; accept
+# both rather than tying the valve to one spelling.
 SUBAGENT_TOOLS = {"Task", "Agent"}
 
 
@@ -80,51 +57,23 @@ def main():
     if not isinstance(tool_input, dict):
         return
 
-    state = common.load_turn_state(payload)
-    changed = False
-
     if tool in SUBAGENT_TOOLS:
-        subagent = str(tool_input.get("subagent_type") or "").strip()
-        if subagent in REVIEW_AGENTS:
-            state.setdefault("session", {})["reviewed"] = True
-            changed = True
         # A foreground subagent returned: free its slot in the concurrency valve (floor 0).
         # Background spawns were never counted, so their return must not decrement either.
         session_id = payload.get("session_id")
         if session_id and not tool_input.get("run_in_background"):
             brain.session_release(session_id)
+        return
 
-    elif tool == "Bash":
-        command = str(tool_input.get("command") or "")
-        token_efficiency.record_bash(state.setdefault("session", {}), command,
-                                     payload.get("tool_output"))
-        changed = True
-        if VERIFICATION.search(command):
-            code = exit_code_of(payload)
-            entry = {"command": command[:300], "exit_code": code, "ts": time.time()}
-            # An unknown exit code counts as success evidence; a known failure is RED instead.
-            kind = "verification" if code is None or code == 0 else "red"
-            if kind == "verification":
-                state["evidence"].append(entry)
-            else:
-                state.setdefault("red", []).append(entry)
-            brain.record_event(payload.get("cwd"), payload.get("session_id"), kind, command)
-            changed = True
-
-    elif tool in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
-        path = str(tool_input.get("file_path") or tool_input.get("path") or "")
-        if path:
-            if path not in state["touched"]:
-                state["touched"].append(path)
-            if Path(path).suffix.lower() not in PROSE_SUFFIXES:
-                state["code_changed"] = True
-                if TEST_PATH.search(path):
-                    state["test_touched"] = True
-            token_efficiency.note_edit(state.setdefault("session", {}))
-            changed = True
-
-    if changed:
-        common.save_state(payload.get("session_id"), state)
+    if tool != "Bash":
+        return
+    command = str(tool_input.get("command") or "")
+    if not VERIFICATION.search(command):
+        return
+    code = exit_code_of(payload)
+    # An unknown exit code counts as success evidence; a known failure is RED instead.
+    kind = "verification" if code is None or code == 0 else "red"
+    brain.record_event(payload.get("cwd"), payload.get("session_id"), kind, command)
 
 
 if __name__ == "__main__":

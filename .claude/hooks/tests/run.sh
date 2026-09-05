@@ -15,7 +15,7 @@ pass() { printf '  ok    %s\n' "$1"; }
 fail() { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; FAILURES=$((FAILURES + 1)); }
 
 section "Unit and contract suites"
-for suite in test_lib test_classifier test_gate test_tdd test_token_efficiency test_guard_and_session test_agentignore test_install test_structure test_review_nudge test_destructive_guard test_project_conventions test_brain test_evals test_release; do
+for suite in test_lib test_classifier test_tdd test_guard_and_session test_agentignore test_install test_structure test_destructive_guard test_project_conventions test_brain test_evals test_release; do
   if out=$(cd "$HOOKS" && python3 "tests/$suite.py" 2>&1); then
     pass "$suite ($(printf '%s' "$out" | grep -oE 'Ran [0-9]+ tests' | head -1))"
   else
@@ -25,7 +25,7 @@ for suite in test_lib test_classifier test_gate test_tdd test_token_efficiency t
 done
 
 section "Degradation: every hook survives hostile input"
-for script in user_prompt_submit post_tool_use stop session_start pre_tool_use; do
+for script in user_prompt_submit post_tool_use session_start pre_tool_use; do
   for payload in '' '{not json' '{}' '[]' 'null'; do
     err=$(printf '%s' "$payload" | python3 "$HOOKS/$script.py" 2>&1 >/dev/null)
     code=$?
@@ -34,7 +34,7 @@ for script in user_prompt_submit post_tool_use stop session_start pre_tool_use; 
     fi
   done
 done
-[ $FAILURES -eq 0 ] && pass "5 hooks x 5 hostile payloads exit 0 cleanly"
+[ $FAILURES -eq 0 ] && pass "4 hooks x 5 hostile payloads exit 0 cleanly"
 
 section "Degradation: no git repository"
 TMP=$(mktemp -d)
@@ -133,6 +133,20 @@ else
     fail "an LLM-backed hook is wired on a hot path"
   else
     pass "no LLM calls on hot paths"
+  fi
+
+  # No hook may end a turn: this setup stopped shipping a Stop hook, and the JSON session
+  # state directory went with it — a registered Stop hook or a surviving state directory is a
+  # machine that has not caught up with the install.
+  if jq -e '.hooks.Stop' "$SETTINGS" >/dev/null 2>&1; then
+    fail "a Stop hook is registered; this setup no longer ships one"
+  else
+    pass "no Stop hook registered"
+  fi
+  if [ -e "${CLAUDE_HOME:-$HOME/.claude}/state" ]; then
+    fail "~/.claude/state is no longer used; delete it"
+  else
+    pass "no JSON session state directory"
   fi
 
   MATCHER=$(jq -r '.hooks.PreToolUse[0].matcher' "$SETTINGS" 2>/dev/null)

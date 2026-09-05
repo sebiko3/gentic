@@ -40,7 +40,7 @@ class InstallContract(unittest.TestCase):
         result = run(dest=self.dest)
         self.assertEqual(result.returncode, 0, result.stderr)
         for rel in (
-            "hooks/stop.py",
+            "hooks/post_tool_use.py",
             "hooks/lib/common.py",
             "hooks/tests/run.sh",
             "commands/ship.md",
@@ -80,11 +80,11 @@ class InstallContract(unittest.TestCase):
 
     def test_check_fails_and_names_the_drifted_file(self):
         run(dest=self.dest)
-        drifted = self.dest / "hooks/stop.py"
+        drifted = self.dest / "hooks/post_tool_use.py"
         drifted.write_text(drifted.read_text() + "\n# drift\n")
         check = run("--check", dest=self.dest)
         self.assertNotEqual(check.returncode, 0, "drift went undetected")
-        self.assertIn("stop.py", check.stdout + check.stderr)
+        self.assertIn("post_tool_use.py", check.stdout + check.stderr)
 
     def test_check_reports_a_missing_file_as_drift(self):
         run(dest=self.dest)

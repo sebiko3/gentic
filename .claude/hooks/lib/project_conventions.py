@@ -35,12 +35,12 @@ MARKER = "gentic/<slug>"
 MARKER_FILE = "CLAUDE.md"
 AUTH_HEADING = "## gentic authorizations"
 VOCABULARY = ("push", "open-pr", "merge-on-green", "deploy-preview", "use-workflow-tool", "spawn-teams")
-# Beside the hooks' state directory (~/.claude/state) — derived, so this file embeds no
-# machine path literal; the harness pins that.
+# Beside the brain (~/.claude/gentic) — derived, so this file embeds no machine path literal;
+# the harness pins that.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import common  # noqa: E402
+import brain  # noqa: E402
 
-TRUST_FILE = common.STATE_DIR.parent / "gentic" / "trusted-projects"
+TRUST_FILE = brain.DEFAULT_PATH.parent / "trusted-projects"
 GRANT_LINE = re.compile(r"^\s*[-*]\s*([A-Za-z-]+)")
 # Must open with an alphanumeric: `..` is otherwise a valid-looking prefix and yields `../x`.
 SAFE_PREFIX = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")

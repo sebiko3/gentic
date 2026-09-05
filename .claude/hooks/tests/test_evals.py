@@ -116,7 +116,6 @@ class EvalsCase(unittest.TestCase):
             "FAKE_CLAUDE_ARGV": str(self.argv_log),
             "FAKE_CLAUDE_TRANSCRIPT": str(self.transcript),
             "GENTIC_BRAIN": str(self.brain_db),
-            "CLAUDE_HOOK_STATE_DIR": str(self.tmp / "state"),
             "CLAUDE_HOME": str(self.home),
         })
         environ.pop("FAKE_CLAUDE_TOUCH", None)

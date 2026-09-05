@@ -36,7 +36,7 @@ RECALL_LIMIT = 8       # notes printed by default
 DETAIL_CHARS = 300     # matches post_tool_use.py's command trim
 PREFERENCE_MIN = 2     # agreeing user decisions before a preference is learned
 
-EVENT_KINDS = ("red", "verification", "gate_block", "nudge_tdd", "nudge_review", "nudge_spend")
+EVENT_KINDS = ("red", "verification")
 
 DESTRUCTIVE = re.compile(r"^\s*(drop|delete|update|alter)\b", re.I)
 

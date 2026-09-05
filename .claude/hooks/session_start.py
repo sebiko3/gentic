@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SessionStart — prune stale state and surface unfinished spec-driven work.
+"""SessionStart — surface unfinished spec-driven work.
 
 A gentic run outlives the session that started it. Without this, resuming means the user
 has to remember the run exists. The brain's memory of this project is surfaced the same way.
@@ -43,7 +43,6 @@ def unfinished(root):
 
 def main():
     payload = common.read_payload()
-    common.prune_state(days=7)
 
     root = common.git_root(payload.get("cwd"))
     if not root:
