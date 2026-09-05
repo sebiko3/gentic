@@ -63,6 +63,17 @@ class InstallContract(unittest.TestCase):
         pre = next((line for line in result.stdout.splitlines() if '"PreToolUse"' in line), "")
         self.assertIn("Task|Agent", pre, "printed PreToolUse matcher lacks the subagent tools")
 
+    def test_settings_block_registers_no_stop_hook(self):
+        """The heredoc is asserted from the file: the installer prints it only when the
+        destination has no hooks key, so stdout would pass vacuously on an installed machine."""
+        source = INSTALL.read_text(encoding="utf-8")
+        block = source[source.index('"hooks": {'):source.index("NOTE", source.index('"hooks": {'))]
+        self.assertNotIn('"Stop"', block)
+        self.assertIn("Task|Agent", block)
+        comment = source[:source.index('"hooks": {')]
+        for phrase in ("verification gate", "review nudge"):
+            self.assertNotIn(phrase, comment, f"installer comment still names the {phrase}")
+
     def test_run_sh_stays_executable(self):
         run(dest=self.dest)
         self.assertTrue(os.access(self.dest / "hooks/tests/run.sh", os.X_OK))

@@ -83,8 +83,9 @@ fi
 printf '%d files changed in %s\n' "$changed" "$DEST"
 
 # Copying the hook scripts does not activate them: Claude Code only runs hooks listed under the
-# `hooks` key of settings.json. Saying nothing here would leave the whole safety layer — the
-# verification gate, the .agentignore guard, the review nudge — silently inert.
+# `hooks` key of settings.json. Saying nothing here would leave the whole layer — the routing
+# frame, the destructive-command and .agentignore guards, the concurrency valve, the RED/GREEN
+# ledger — silently inert. No Stop hook is shipped: nothing here ends a turn.
 if ! grep -q '"hooks"' "$DEST/settings.json" 2>/dev/null; then
   cat <<'NOTE'
 
@@ -99,8 +100,7 @@ your settings.json (merging with what is already there):
     "PreToolUse":      [{"matcher": "Bash|Read|Edit|Write|MultiEdit|NotebookEdit|NotebookRead|Task|Agent",
                          "hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/pre_tool_use.py\"",   "timeout": 5}]}],
     "PostToolUse":     [{"matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit|Task|Agent",
-                         "hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/post_tool_use.py\"",  "timeout": 5}]}],
-    "Stop":            [{"hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/stop.py\"",           "timeout": 5}]}]
+                         "hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/post_tool_use.py\"",  "timeout": 5}]}]
   }
 
 Back the file up first. Verify with: bash .claude/hooks/tests/run.sh
