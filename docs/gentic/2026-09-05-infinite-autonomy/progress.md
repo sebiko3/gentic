@@ -6,7 +6,7 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 - [x] 1 Scout
 - [x] 2 Interview (all defaults adopted; user delegated)
 - [x] 3 Masterprompt (critic: two passes, all blockers fixed inline)
-- [ ] 4 Execute
+- [x] 4 Execute (tasks 1–8 done; task 9 blocked: the permission classifier denies writes under `~/.claude`)
 - [ ] 5 Iterate
 
 ## Tasks
