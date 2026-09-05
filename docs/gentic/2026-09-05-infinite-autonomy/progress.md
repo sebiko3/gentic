@@ -5,7 +5,7 @@ Iteration budget: 13 remaining (rungs spend it; task sizes never do)
 ## Phases
 - [x] 1 Scout
 - [x] 2 Interview (all defaults adopted; user delegated)
-- [ ] 3 Masterprompt
+- [x] 3 Masterprompt (critic: two passes, all blockers fixed inline)
 - [ ] 4 Execute
 - [ ] 5 Iterate
 
