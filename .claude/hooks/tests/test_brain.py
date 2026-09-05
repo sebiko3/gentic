@@ -344,8 +344,10 @@ class Documentation(unittest.TestCase):
         for token in ("brain.sqlite", "GENTIC_BRAIN", "sql", ".bak", "iCloud"):
             self.assertIn(token, readme, f"README does not mention {token!r}")
         hooks_readme = (HOOKS / "README.md").read_text(encoding="utf-8")
-        for kind in ("red", "verification", "gate_block", "nudge_tdd", "nudge_review", "nudge_spend"):
+        for kind in ("red", "verification"):
             self.assertIn(kind, hooks_readme, f"hooks README does not list the {kind} event")
+        for kind in ("gate_block", "nudge_tdd", "nudge_review", "nudge_spend"):
+            self.assertNotIn(kind, hooks_readme, f"hooks README still lists the {kind} event")
         self.assertIn("silent", hooks_readme)
 
     def test_harness_registers_and_isolates_the_brain_suite(self):

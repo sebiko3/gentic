@@ -1,6 +1,6 @@
 # gentic
 
-A spec-first, test-first, resumable deep workflow for [Claude Code](https://claude.com/claude-code). One command turns a vague request into verified work: informed clarifying questions → a masterprompt that could brief a stranger → execution in small test-first steps → iteration on an escalation ladder with a hard budget.
+A spec-first, test-first, resumable deep workflow for [Claude Code](https://claude.com/claude-code). One command turns a vague request into verified work: informed clarifying questions → a masterprompt that could brief a stranger → execution in small test-first steps → iteration on an escalation ladder whose budget escalates rather than halts.
 
 ## Why
 
@@ -66,16 +66,16 @@ learn the test was ever seen to fail — memory is precisely what a compaction t
 prompts count as behaviour and get contract tests; `n/a` is reserved for tasks that change nothing
 observable, and must say why.
 
-**The hooks notice, they do not police.** The ledger now keeps *failing* verification runs — the
-RED signal it used to discard — and the Stop hook mentions a turn that changed production code with
-no test touched and no failure observed. Advisory, once per session. The verification gate stays
-the setup's only hard block, because scarcity is what makes it credible.
+**The hooks record, they never block.** Every recognised verification run — failing or passing —
+lands in the brain as a `red` or `verification` event tagged with the run it belongs to, so a
+run's RED/GREEN history is one query. No hook ends a turn: the Iterate phase and `dod-auditor`
+are the only judges of done-ness.
 
 ## The fibonacci mechanics
 
 - **Task sizes** are 1/2/3/5/8 points; a task above 8 must be split (if it can't be, the spec is under-specified).
 - **Escalation rungs** cost 1 (micro-fix), 2 (rework component), 3 (redesign within spec), 5 (re-open masterprompt), 8 (re-open interview). Same item fails twice at a rung → the next rung is mandatory. No third tries.
-- **The budget is 13 points per run.** When it's gone, the run stops with an honest handoff instead of thrashing.
+- **The budget is 13 points per run.** When it's gone, the ladder escalates instead of halting: the next failure re-opens the spec (rung 5), a second exhaustion re-opens the Interview (rung 8), which resets the budget. A run never stops itself; only the `STOP` file ends one early.
 
 The costs grow super-linearly because each rung discards more prior work — and the budget forces a real decision between many small fixes and one deep rethink.
 
@@ -91,7 +91,7 @@ pins each agent's declared tools so this claim and the frontmatter cannot drift 
 
 | Agent | Fires when | What makes it useful |
 |-------|-----------|----------------------|
-| [`code-reviewer`](.claude/agents/code-reviewer.md) | `/review`, `/ship`, or the Stop-hook nudge | Correctness, security, and silent failures — scored 0-100 and **reported only at ≥80**. A reviewer that reports everything gets skimmed and then ignored. |
+| [`code-reviewer`](.claude/agents/code-reviewer.md) | `/review` or `/ship` | Correctness, security, and silent failures — scored 0-100 and **reported only at ≥80**. A reviewer that reports everything gets skimmed and then ignored. |
 | [`dod-auditor`](.claude/agents/dod-auditor.md) | the Iterate phase, before any completion claim | Runs each Definition-of-Done check literally and returns PROVEN / FAILED / **UNVERIFIABLE**. It may never edit a DoD item to make it pass, and never rounds unverifiable up to proven. |
 | [`masterprompt-critic`](.claude/agents/masterprompt-critic.md) | the Masterprompt critique pass | Gets the spec and nothing else — no brief, no decisions, no conversation. That withheld context is the instrument: it occupies the position of the agent who executes this after a compaction. |
 | [`task-executor`](.claude/agents/task-executor.md) | Execute fan-out, on independent 3+ point tasks | Does one task test-first and returns a fixed evidence block. Refuses a vague assignment instead of guessing — it has no channel back to the user, so improvising is how a fan-out produces four readings of one spec. |
@@ -100,9 +100,8 @@ pins each agent's declared tools so this claim and the frontmatter cannot drift 
 `ui-tester` is the one agent whose tools are not pinned: it must inherit the browser tools, so
 its own text is what forbids it to edit.
 
-Review is no longer something you have to remember. When a session has changed code and no
-review has run, the Stop hook prints a one-line suggestion — advisory, never blocking, once per
-session. The verification gate stays the setup's only hard block.
+Review runs when you ask for it: `/review` on its own, or `/ship`, which reviews before it
+commits. Nothing nags and nothing blocks — the hooks only record.
 
 ## The brain
 
@@ -121,7 +120,8 @@ python3 ~/.claude/hooks/lib/brain.py sql "select kind, count(*) from events grou
 
 | What it holds | Who writes it | Who reads it |
 |---------------|---------------|--------------|
-| `events` — every `red` and `verification` run, every gate block and nudge | the hooks, automatically, best-effort | you, via `sql`; later runs' tooling |
+| `events` — every `red` and `verification` run, tagged with the open run | the hooks, automatically, best-effort | you, via `sql`; later runs' tooling |
+| `sessions` — the concurrency valve's per-session counter | the hooks, automatically, best-effort | the valve itself |
 | `decisions` and learned preferences | the Interview (`--source user`), the Masterprompt (`--source default`) | the Interview, before it asks |
 | `lessons` — what each spent rung taught, and *who caught it* | the Iterate phase | the Scout phase, before it explores |
 | `notes` with full-text recall | the agent, whenever something is worth keeping | the Scout phase; anyone |
@@ -137,9 +137,12 @@ after the user has given it twice, the most recent user answer wins, and default
 `sql` is deliberately unrestricted — the agent may create its own tables. Before any `DROP`,
 `DELETE`, `UPDATE` or `ALTER` the file is copied to `brain.sqlite.bak`, one level of undo.
 Commands recorded as events have credentials scrubbed (`Authorization:`, `--password`,
-`token=`, `AWS_…=`); notes are not scrubbed, so never note a secret. There are no schema
-migrations: if a later version changes a table, delete the file or point `GENTIC_BRAIN` at a
-new one. SQLite's write-ahead log assumes a local disk — a home directory synced by iCloud or
+`token=`, `AWS_…=`); notes are not scrubbed, so never note a secret. The schema is versioned
+(`PRAGMA user_version`): an older brain is upgraded in place on first open by additive, guarded
+migrations, and rows are never rewritten. Two tables grow on their own and are bounded:
+`prune` deletes `events` older than 89 days and `sessions` idle for 8, and every session start
+prunes quietly. The hooks keep no JSON state anywhere — the `sessions` table is the whole of
+it. SQLite's write-ahead log assumes a local disk — a home directory synced by iCloud or
 Dropbox is a known hazard; keep the brain out of synced folders.
 
 The [`gentic-brain`](.claude/skills/gentic-brain/SKILL.md) skill carries the full command set
@@ -265,7 +268,9 @@ phase by following `/ship`'s own steps and reporting the PR URL. `merge-on-green
 `deploy-preview`, `use-workflow-tool` and `spawn-teams` are reserved words for the release lane
 and the orchestrator mesh. To halt a run from outside, create `docs/gentic/<run>/STOP` (or say
 `/gentic stop <slug>`): the next task or rung writes a handoff and ends; delete the file to
-resume. A hook also refuses a sixth concurrent foreground subagent per session.
+resume. That is the only early end — an autonomous run never stops itself, takes rung 5 and
+rung 8 on its own, and escalates instead of halting when its budget is spent. A hook also
+refuses a sixth concurrent foreground subagent per session.
 
 ## Install
 
@@ -291,7 +296,7 @@ For gentic alone, without the hooks and agents, copy `.claude/skills/gentic*` in
 skills directory and add the **Routing** section from [CLAUDE.md](CLAUDE.md) to your own — the
 workflow is markdown with no dependencies.
 
-Works standalone — the test-first discipline is gentic's own skill, not a borrowed one. If the [superpowers](https://github.com/obra/superpowers) plugin is installed, gentic composes with it (TDD, systematic debugging, verification gates) at marked points.
+Works standalone — the test-first discipline is gentic's own skill, not a borrowed one. If the [superpowers](https://github.com/obra/superpowers) plugin is installed, gentic composes with it (TDD, systematic debugging, verification before completion) at marked points.
 
 ## Adopting gentic in a project
 
@@ -352,7 +357,7 @@ This repository built itself with its own workflow — see [docs/gentic/2026-08-
 
 - **Why five phases instead of "questions → masterprompt → iterate"?** The original three-phase shape lacks grounding (questions asked from ignorance are generic) and an anchor for iteration (without a checkable Definition of Done, iteration spins). Scout makes questions sharp; the DoD makes iteration converge.
 - **Why not multi-agent-first?** Subagent fan-out is an execution optimization, not a workflow. gentic stays single-threaded by default (cheap, debuggable, no opt-in friction). The four agents are optional accelerants at named points, and each earns its place by being *worse informed* than the main thread in a useful way: `masterprompt-critic` is denied the conversation, `dod-auditor` is denied the author's confidence, `task-executor` is denied the neighbouring tasks. An agent that merely knows what you already know adds cost, not signal.
-- **Why a nudge instead of a gate?** The setup has exactly one hard block — a completion claim with no verification behind it. That scarcity is what makes it credible. Everything else, review included, advises and gets out of the way; a second blocker would turn the setup into something to work around.
+- **Why do the hooks never block?** A gate that ends a turn is a stop condition, and a stop condition in an autonomous run is a place where the work waits for nobody. The hooks record — every verification run, tagged with its run, into the brain — and the Iterate phase with `dod-auditor` judges; a run ends when its Definition of Done is proven or when the user drops a `STOP` file, never because a hook decided so.
 - **Why files instead of memory?** Context windows end; `docs/gentic/` doesn't. The masterprompt's quality bar — "a stranger could deliver from this file alone" — is also exactly what a post-compaction session needs.
 
 ## License
