@@ -149,6 +149,19 @@ class HooksWriteEvents(BrainCase):
         self.assertEqual(len(self.rows("select * from events where kind = 'gate_block'")), 1)
         self.assertEqual(len(self.rows("select * from events where kind = 'nudge_tdd'")), 1)
 
+    def test_events_carry_the_open_run(self):
+        """An event belongs to the project's open run, so a run's RED/GREEN history is one query."""
+        self.bash_post("pytest -x", exit_code=1)
+        self.assertIsNone(self.rows("select run from events order by id desc limit 1")[0]["run"],
+                          "a project with no runs must tag NULL")
+        self.ok("run", "start", "alpha", "--goal", "x")
+        self.bash_post("pytest -x", exit_code=1)
+        self.assertEqual(self.rows("select run from events order by id desc limit 1")[0]["run"], "alpha")
+        self.ok("run", "finish", "alpha", "--outcome", "done")
+        self.bash_post("pytest -x", exit_code=0)
+        self.assertIsNone(self.rows("select run from events order by id desc limit 1")[0]["run"],
+                          "a finished run must not tag later events")
+
     def test_brain_failure_is_invisible_to_hooks(self):
         blocker = self.tmp / "blocker.txt"
         blocker.write_text("not a directory")
@@ -241,6 +254,63 @@ class RunsAndStamps(BrainCase):
         self.assertNotEqual(self.rows("select sha from stamps where path like '%a.md'")[0]["sha"], before)
         self.ok("stamp", "other-run", str(a))
         self.assertEqual(len(self.rows("select * from stamps")), 3, "a second run must add its own rows")
+
+
+# The pre-migration shape of the tables a version-0 brain carries, inlined so the fixture does
+# not depend on whatever brain.SCHEMA says today.
+OLD_DDL = (
+    "CREATE TABLE notes (id INTEGER PRIMARY KEY, ts REAL, project TEXT, run TEXT, key TEXT, body TEXT, tags TEXT)",
+    "CREATE TABLE events (id INTEGER PRIMARY KEY, ts REAL, project TEXT, session TEXT, kind TEXT, detail TEXT, data TEXT)",
+    "CREATE TABLE lessons (id INTEGER PRIMARY KEY, ts REAL, project TEXT, run TEXT, item TEXT, rung INTEGER,"
+    " points INTEGER, caught_by TEXT, cause TEXT, note TEXT)",
+    "CREATE TABLE eval_runs (id INTEGER PRIMARY KEY, ts REAL, project TEXT, suite TEXT, case_name TEXT, arm TEXT,"
+    " run_index INTEGER, model TEXT, cost_usd REAL, turns INTEGER, is_error INTEGER, skipped INTEGER,"
+    " exhausted INTEGER DEFAULT 0)",
+)
+INDEXES = ("idx_events_project_ts", "idx_events_run", "idx_notes_project_ts", "idx_lessons_project_ts",
+           "idx_runs_project_finished")
+
+
+class Migrations(BrainCase):
+    def brain_module(self):
+        sys.path.insert(0, str(HOOKS / "lib"))
+        os.environ["GENTIC_BRAIN"] = str(self.db)
+        self.addCleanup(os.environ.pop, "GENTIC_BRAIN", None)
+        self.addCleanup(sys.path.remove, str(HOOKS / "lib"))
+        import brain
+        return brain
+
+    def test_old_brain_is_migrated_in_place(self):
+        with sqlite3.connect(self.db) as conn:
+            for statement in OLD_DDL:
+                conn.execute(statement)
+            conn.execute("insert into notes (ts, project, key, body) values (1, 'p', 'k', 'b')")
+            conn.execute("insert into lessons (ts, project, item, rung, points) values (1, 'p', 'i', 1, 1)")
+            conn.execute("insert into events (ts, project, kind, detail) values (1, 'p', 'red', 'pytest')")
+            self.assertEqual(conn.execute("pragma user_version").fetchone()[0], 0)
+        brain = self.brain_module()
+        self.assertEqual(brain.SCHEMA_VERSION, 2)
+        brain.connect().close()
+        with sqlite3.connect(self.db) as conn:
+            self.assertEqual(conn.execute("pragma user_version").fetchone()[0], 2)
+            self.assertIn("sessions", [r[0] for r in conn.execute("select name from sqlite_master where type='table'")])
+            self.assertIn("run", [r[1] for r in conn.execute("pragma table_info(events)")])
+            indexes = {r[0] for r in conn.execute("select name from sqlite_master where type='index'")}
+            self.assertTrue(set(INDEXES) <= indexes, f"missing indexes: {set(INDEXES) - indexes}")
+            self.assertEqual(conn.execute("select key, body from notes").fetchall(), [("k", "b")])
+            self.assertEqual(conn.execute("select item from lessons").fetchall(), [("i",)])
+            self.assertEqual(conn.execute("select kind, run from events").fetchall(), [("red", None)],
+                             "existing events must keep run = NULL (no backfill)")
+        brain.connect().close()   # a second open is a no-op and raises nothing
+        with sqlite3.connect(self.db) as conn:
+            self.assertEqual(conn.execute("pragma user_version").fetchone()[0], 2)
+
+    def test_new_brain_starts_at_the_current_version(self):
+        brain = self.brain_module()
+        brain.connect().close()
+        with sqlite3.connect(self.db) as conn:
+            self.assertEqual(conn.execute("pragma user_version").fetchone()[0], brain.SCHEMA_VERSION)
+            self.assertIn("sessions", [r[0] for r in conn.execute("select name from sqlite_master where type='table'")])
 
 
 class SessionStart(BrainCase):

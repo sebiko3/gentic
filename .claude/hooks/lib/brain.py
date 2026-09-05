@@ -69,6 +69,20 @@ SCHEMA = (
     " id INTEGER PRIMARY KEY, run_id INTEGER, name TEXT, type TEXT, passed INTEGER, detail TEXT)",
 )
 
+# Schema versions are additive and every statement is guarded, so opening a brain of any earlier
+# shape upgrades it in place. Version 1 is the pre-versioning shape (eval_runs.exhausted);
+# version 2 adds the sessions table, events.run and the query indexes. Existing rows are never
+# rewritten: events from before version 2 keep run = NULL.
+SCHEMA_VERSION = 2
+
+INDEXES = (
+    "CREATE INDEX IF NOT EXISTS idx_events_project_ts ON events(project, ts)",
+    "CREATE INDEX IF NOT EXISTS idx_events_run ON events(run)",
+    "CREATE INDEX IF NOT EXISTS idx_notes_project_ts ON notes(project, ts)",
+    "CREATE INDEX IF NOT EXISTS idx_lessons_project_ts ON lessons(project, ts)",
+    "CREATE INDEX IF NOT EXISTS idx_runs_project_finished ON runs(project, finished)",
+)
+
 FTS_SCHEMA = (
     "CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5("
     " key, body, content='notes', content_rowid='id')",
@@ -120,13 +134,38 @@ def has_fts(conn):
     return row is not None
 
 
+def add_column(conn, table, column, declaration):
+    """ALTER TABLE … ADD COLUMN, skipped when the column already exists."""
+    if column not in [row[1] for row in conn.execute(f"PRAGMA table_info({table})")]:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {declaration}")
+
+
+def migrate_1(conn):
+    add_column(conn, "eval_runs", "exhausted", "INTEGER DEFAULT 0")
+
+
+def migrate_2(conn):
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS sessions ("
+        " id TEXT PRIMARY KEY, agents_in_flight INTEGER NOT NULL DEFAULT 0, updated REAL)"
+    )
+    add_column(conn, "events", "run", "TEXT")
+    for statement in INDEXES:
+        conn.execute(statement)
+
+
+MIGRATIONS = (migrate_1, migrate_2)
+
+
 def ensure_schema(conn):
     for statement in SCHEMA:
         conn.execute(statement)
-    # One additive, idempotent migration: brains created before eval_runs.exhausted existed.
-    columns = [row[1] for row in conn.execute("PRAGMA table_info(eval_runs)")]
-    if columns and "exhausted" not in columns:
-        conn.execute("ALTER TABLE eval_runs ADD COLUMN exhausted INTEGER DEFAULT 0")
+    current = conn.execute("PRAGMA user_version").fetchone()[0]
+    for version, migrate in enumerate(MIGRATIONS, start=1):
+        if version > current:
+            migrate(conn)
+    if current < SCHEMA_VERSION:
+        conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     if fts_wanted() and not has_fts(conn):
         try:
             for statement in FTS_SCHEMA:
@@ -161,9 +200,9 @@ def record_event(cwd, session, kind, detail, data=None):
         conn = connect()
         try:
             conn.execute(
-                "INSERT INTO events (ts, project, session, kind, detail, data) VALUES (?,?,?,?,?,?)",
+                "INSERT INTO events (ts, project, session, kind, detail, data, run) VALUES (?,?,?,?,?,?,?)",
                 (time.time(), project, session, kind, scrub(str(detail))[:DETAIL_CHARS],
-                 json.dumps(data) if data is not None else None),
+                 json.dumps(data) if data is not None else None, open_run(conn, project)),
             )
             conn.commit()
         finally:
@@ -172,6 +211,15 @@ def record_event(cwd, session, kind, detail, data=None):
     except Exception:
         # A brain that cannot be opened, created or locked in time is invisible to the session.
         return False
+
+
+def open_run(conn, project):
+    """Slug of the project's most recently started, unfinished run, or None."""
+    row = conn.execute(
+        "SELECT slug FROM runs WHERE project = ? AND finished IS NULL ORDER BY started DESC LIMIT 1",
+        (project,),
+    ).fetchone()
+    return row[0] if row else None
 
 
 def summary(project):
